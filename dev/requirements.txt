@@ -6,3 +6,4 @@ python-dotenv
 redis
 openai
 langchain_openai
+pysqlite3-binary
