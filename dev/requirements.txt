@@ -6,3 +6,4 @@ python-dotenv
 redis
 openai
 langchain_openai
+sqlite==3.45.3
