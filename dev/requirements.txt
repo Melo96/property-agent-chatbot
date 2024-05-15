@@ -1,0 +1,8 @@
+streamlit
+langchain
+chromadb
+FlagEmbedding
+python-dotenv
+redis
+openai
+langchain_openai
