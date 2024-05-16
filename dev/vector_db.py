@@ -24,12 +24,14 @@ for p in docs_path.rglob("*.json"):
     docs.append(doc)
 
 client = openai.Client()
+client.chat.completions.create(temperature=0)
 
 def chat_oepnai(doc, client, system_prompt):
     response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": 'system', "content": system_prompt},
-                    {'role': 'user', 'content': f'Json File: {json.dumps(doc)}. Response: '}],
+                    {'role': 'user', 'content': f'Json File: {json.dumps(doc, ensure_ascii=False)}. Response: '}],
+            temperature=0
         )
     message = response.choices[0].message.content
     return message
