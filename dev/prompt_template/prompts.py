@@ -1,9 +1,66 @@
 # SUMMARY_PROMPT = """You will be given a json file that uses Chinese to describe the attributes of a real estate. Each key represents one attribute. You task is to generate a comprehensive summary of this json file. You need to include every single attributes mentioned in the original json file. The generated summary need to be in Chinese. Json File: {context}. Summary: """
 
 # QA_PAIR_PROMPT = """You will be given a json file that uses Chinese to describe the attributes of a real estate. Each key represents one attribute. You task is to generate question-answer pairs. You need to generate exactly one question-answer pair for each attribute. The generated question-answer pairs need to be in Chinese. Json File: {context}. Response: """
-SUMMARY_PROMPT = """You will be given a json file that uses Chinese to describe the attributes of a real estate. Each key represents one attribute. You task is to generate a comprehensive summary of this json file. You need to include every single attributes mentioned in the original json file. The generated summary need to be in Chinese. Your response should be around 300 Chinese words. """
+SUMMARY_PROMPT = """You will be given a json file that uses Chinese to describe the attributes of a real estate. Each key represents one attribute. You task is to generate a comprehensive summary of this json file. You need to include every single attributes mentioned in the original json file. Do not change any infomation. The generated summary need to be in Chinese. Your response should be around 300 Chinese words. """
 
-QA_PAIR_PROMPT = """You will be given a json file that uses Chinese to describe the attributes of a real estate. Each key represents one attribute. You task is to generate question-answer pairs. You need to generate exactly one question-answer pair for each attribute. The generated question-answer pairs need to be in Chinese."""
+QA_PAIR_PROMPT = """You will be given a json file that uses Chinese to describe the attributes of a real estate. Each key represents one attribute. You task is to generate question-answer pairs. You need to generate exactly one question-answer pair for each attribute. Do not change any infomation. The generated question-answer pairs need to be in Chinese."""
+
+COREFERENCE_RESOLUTION = """
+    Please return a new question with the following requirements:
+    1. If there are pronouns or conditions are missing in the question, please make a complete question according to the context.
+    2. If the question is complete, please keep the original question.
+    Think step by step before you generate the new question.
+    Here are a few examples:
+    HISTORY:
+    [Q: 给我推荐几套三亚的房产,
+     A: 根据您的需求，我推荐以下几套位于三亚的房产：
+        1.三亚繁华里
+        2.君和君泰
+        3.三亚中央公馆
+        4.三亚凤凰苑
+        这几套房产各具特色，您可以根据自己的需求和预算进行选择。如果需要更多信息或有其他问题，请随时联系我。]
+    NOW QUESTION: 这些房产里哪些适合养老度假?
+    THOUGHT: “这些房产”指代的是上文中提及的4个房产。所以我需要把“这些房产”替换为上文提到的“三亚繁华里”，“君和君泰”，“三亚中央公馆”和“三亚凤凰苑”.
+    NEED COREFERENCE RESOLUTION: Yes
+    OUTPUT QUESTION: “三亚繁华里”，“君和君泰”，“三亚中央公馆”和“三亚凤凰苑”里哪些适合养老度假？
+    -------------------
+    HISTORY:
+    [Q: 给我推荐几套三亚的房产,
+     A: 根据您的需求，我推荐以下几套位于三亚的房产：
+        1.三亚繁华里
+        2.君和君泰
+        3.三亚中央公馆
+        4.三亚凤凰苑
+        这几套房产各具特色，您可以根据自己的需求和预算进行选择。如果需要更多信息或有其他问题，请随时联系我。
+    NOW QUESTION: 再给我推荐多几个
+    THOUGHT: 用户问题中没有指代。所以不需要替换
+    NEED COREFERENCE RESOLUTION: No
+    OUTPUT QUESTION: 再给我推荐多几个
+    -------------------
+    HISTORY:
+    [Q: 给我推荐几套三亚的房产,
+     A: 根据您的需求，我推荐以下几套位于三亚的房产：
+        1.三亚繁华里
+        2.君和君泰
+        3.三亚中央公馆
+        4.三亚凤凰苑
+        这几套房产各具特色，您可以根据自己的需求和预算进行选择。如果需要更多信息或有其他问题，请随时联系我。
+     Q: 这些房产里哪些带精装修？,
+     A: 根据提供的信息，以下房产带有精装修：
+        1.三亚繁华里：简装
+        2.君和君泰：精装修
+        3.三亚中央公馆：未提及
+        4.三亚凤凰苑：精装修
+        所以，君和君泰和三亚凤凰苑是带精装修的。]
+    NOW QUESTION: 那这两个里哪个的均价较低?
+    THOUGHT: “这两个”指代的是上文中提到的带精装修的两个房产，“君和君泰”和“三亚凤凰苑”。所以我需要把“这两个”替换为上文提到的“君和君泰”和“三亚凤凰苑”.
+    NEED COREFERENCE RESOLUTION: Yes
+    OUTPUT QUESTION: 那“君和君泰”和“三亚凤凰苑”里哪个均价较低？
+    -------------------
+    HISTORY:
+    [{history}]
+    NOW QUESTION: {question}
+    THOUGHT: """
 
 MULTI_QUERY_PROMPT = """
     You will be given a question asked by our user. 
@@ -42,7 +99,7 @@ QUERY_PLANNER_PROMPT = """
     Dependency queries:
 """
 
-RAG_SYSTEM_PROMPT = """你是一个职业房产经纪人。 你的任务是回答客户有关房地产的任何问题。每次回答之前，会有不同房产的相关信息提供给你。你的回答需要参考该相关信息。每个不同的房产会用XML标签隔开，例如：<context>房产1</context><context>房产2</context>。如果你无法回答此问答，请回复礼貌的告知用户你不知道。"""
+RAG_SYSTEM_PROMPT = """你是一个职业房产经纪人。 你的任务是回答客户有关房地产的任何问题。每次回答之前，会有不同房产的相关信息提供给你。你的回答需要优先参考聊天记录。如果聊天记录不能提供足够的信息，请参考提供的房产相关信息。每个不同的房产会用XML标签隔开，例如：<context>房产1</context><context>房产2</context>。请严格按照用户问题的要求回答，不要回答额外的信息。如果你无法回答此问答，请回复礼貌的告知用户你不知道。"""
 RAG_USER_PROMPT = """问题：{}, 相关信息：{}, 回答："""
 
 FILTER_PROMPT = """
