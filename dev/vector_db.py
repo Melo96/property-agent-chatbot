@@ -1,3 +1,4 @@
+import os
 import json
 import redis
 import openai
@@ -65,15 +66,12 @@ vectorstore = Chroma(
     embedding_function=OpenAIEmbeddings(),
     persist_directory="data/chroma_openai",
 )
-host = 'redis-10020.c252.ap-southeast-1-1.ec2.redns.redis-cloud.com'
+host = os.environ['REDIS_HOST']
 port = '10020'
-password = 'yfT9uQWDa3BFAA871OmLhhUbLv3oETWh'
+password = os.environ['REDIS_PASSWORD']
 
 client = redis.Redis(host=host, port=port, password=password, decode_responses=True)
 store = RedisStore(client=client)
-id_key = "doc_id"
-ori_text = "ori_text"
-summary = "summary"
 
 # The retriever (empty to start)
 retriever = MultiVectorRetriever(

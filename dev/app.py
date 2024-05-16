@@ -2,7 +2,7 @@
 # __import__('pysqlite3')
 # import sys
 # sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-
+import os
 import openai
 import cohere
 import json
@@ -10,7 +10,6 @@ import streamlit as st
 import time
 import redis
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.document_transformers import LongContextReorder
 from langchain_community.vectorstores import Chroma
 from langchain_community.storage import RedisStore
 from prompt_template.prompts import *
@@ -20,14 +19,14 @@ load_dotenv()
 
 rerank = False
 
-co = cohere.Client('LaLtYhX3dsRsCxURaEPcidgL9Se9gNfG0h9lLorf')
+co = cohere.Client(os.environ['COHERE_API_KEY'])
 llm = "gpt-4o"
 reranker = 'rerank-multilingual-v3.0'
 collection_name = "summaries"
 persist_directory = "data/chroma_openai"
-redis_host = 'redis-10020.c252.ap-southeast-1-1.ec2.redns.redis-cloud.com'
+redis_host = os.environ['REDIS_HOST']
 redis_port = '10020'
-redis_password = 'yfT9uQWDa3BFAA871OmLhhUbLv3oETWh'
+redis_password = os.environ['REDIS_PASSWORD']
 top_k = 10
 doc_id_key = "doc_id"
 
@@ -96,7 +95,7 @@ def rag(ori_query):
     doc_ids = set()
     for query in queries:
         matches = st.session_state['vectorstore'].max_marginal_relevance_search(query, k=top_k, lambda_mult=0.5)
-        # matches = st.session_state['vectorstore'].similarity_search_with_relevance_scores(query, k=top_k)
+        # matches = st.session_state['vectorstore'].similarity_search_with_relevance_scores(query, k=top_k, score_threshold=0.7)
         doc_ids.update([match.metadata['doc_id'] for match in matches])
     doc_ids = list(doc_ids)
 
