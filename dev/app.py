@@ -136,7 +136,7 @@ def chat(ori_query):
     if router_type=='embedding':
         pass
     else:
-        router_result = chat_openai(ROUTER_PROMPT.format(question=ori_query), CHAT_SYSTEM_PROMPT, temperature=0)
+        router_result = chat_openai(ROUTER_PROMPT.format(question=ori_query), temperature=0)
         if 'Output: ' in router_result:
             router_result = router_result.split('Output: ')[1]
     e = time.time()
@@ -146,7 +146,7 @@ def chat(ori_query):
     if router_result=='query':
         response = rag(ori_query)
     else:
-        response = chat_openai(ori_query, chat_history=st.session_state['messages'])
+        response = chat_openai(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
     
     st.markdown(f"""
         {str(response)}
