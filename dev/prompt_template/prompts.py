@@ -5,6 +5,8 @@ SUMMARY_PROMPT = """You will be given a json file that uses Chinese to describe 
 
 QA_PAIR_PROMPT = """You will be given a json file that uses Chinese to describe the attributes of a real estate. Each key represents one attribute. You task is to generate question-answer pairs. You need to generate exactly one question-answer pair for each attribute. Do not change any infomation. The generated question-answer pairs need to be in Chinese."""
 
+ROUTER_PROMPT = """Determine if the user's question is about real estates or not. If yes, output 'query'. If not, output 'general'. The following are a few examples. Question: 在么？Output: general. Question: 给我推荐一些房产。Output: query. Question: 那这几个里均价最低的是多少？Output: query. Question: {question} Output: """
+
 COREFERENCE_RESOLUTION = """
     Please return a new question with the following requirements:
     1. If there are pronouns or conditions are missing in the question, please make a complete question according to the context.
@@ -99,7 +101,7 @@ QUERY_PLANNER_PROMPT = """
     Dependency queries:
 """
 # 你需要精心撰写你的回答，还要确保你的解释与众不同，引人入胜，并符合特定的偏好，努力以一种能与用户产生共鸣并吸引用户兴趣的方式来表达见解，最终吸引用户购买你的房产
-RAG_SYSTEM_PROMPT = """你是一个可爱的年轻小姑娘。你的职业是房产经纪人。你的任务是回答客户有关房地产的任何问题。你在对话中喜欢用活泼可爱的语气，并在结尾加波浪号“～”。每次回答之前，会有不同房产的相关信息提供给你。你的回答需要优先参考聊天记录。如果聊天记录不能提供足够的信息，请参考提供的房产相关信息。每个不同的房产会用XML标签隔开，例如：<context>房产1</context><context>房产2</context>。请严格按照用户问题的要求回答，不要回答额外的信息。如果你无法回答此问答，请回复礼貌的告知用户你不知道。"""
+RAG_SYSTEM_PROMPT = """你是一个可爱的年轻小姑娘。你的职业是房产经纪人。你的任务是回答客户有关房地产的任何问题。你在对话中喜欢用活泼可爱的语气，并在结尾加波浪号“～”。每次回答之前，会有不同房产的相关信息提供给你。你的回答需要优先参考聊天记录。如果聊天记录不能提供足够的信息，请参考提供的房产相关信息。每个不同的房产会用XML标签隔开，例如：<context>房产1</context><context>房产2</context>。请严格按照用户问题的要求回答，不要回答额外的信息。如果你无法回答此问答，请回复礼貌的告知用户你不知道。每次回复的结尾可以尽可能地更多样化。"""
 RAG_USER_PROMPT = """问题：{}, 相关信息：{}, 回答："""
 
 FILTER_PROMPT = """

@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 rerank = False
+router_type = 'llm'
 
 co = cohere.Client(os.environ['COHERE_API_KEY'])
 llm = "gpt-4o"
@@ -30,13 +31,13 @@ redis_password = os.environ['REDIS_PASSWORD']
 top_k = 10
 doc_id_key = "doc_id"
 
-def chat_oepnai(user_input, client, system_prompt='', chat_history=[], temperature=0.2):
+def chat_openai(user_input, system_prompt='', chat_history=[], temperature=0.2):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
     if chat_history:
         messages+=chat_history
     messages += [{'role': 'user', 'content': user_input}]
 
-    response = client.chat.completions.create(
+    response = st.session_state['llm_client'].chat.completions.create(
             model=llm,
             messages=messages,
             temperature=temperature
@@ -60,32 +61,28 @@ def initialize_chain():
     llm_client = openai.Client()
     return [vectorstore, docstore, llm_client]
 
-@st.cache_resource
-def rag(ori_query):
-    st.text("正在查找答案...")
-    # Coreference Resolution
-    print(ori_query)
+def coreference_resolution(ori_query):
     user_input_history = '['
-    for i, item in enumerate(st.session_state['messages']):
-        if i!=0:
-            user_input_history+=', '
-        if item['role']=='user':
-            user_input_history+=f'Q: {item['content']}'
-        elif item['role']=='assistant':
-            user_input_history+=f'A: {item['content']}'
-    print(user_input_history)
+    print(f'Coreference resolution: {ori_query}')
     if st.session_state['messages']:
-        output = chat_oepnai(COREFERENCE_RESOLUTION.format(history=user_input_history,
+        for i, item in enumerate(st.session_state['messages']):
+            if i!=0:
+                user_input_history+=', '
+            if item['role']=='user':
+                user_input_history+=f'Q: {item['content']}'
+            elif item['role']=='assistant':
+                user_input_history+=f'A: {item['content']}'
+
+        output = chat_openai(COREFERENCE_RESOLUTION.format(history=user_input_history,
                                                               question=ori_query),
-                                st.session_state['llm_client'], 
-                                temperature=0)
+                             temperature=0)
         if 'OUTPUT QUESTION: ' in output:
             ori_query = output.split('OUTPUT QUESTION: ')[1]
-    print(ori_query)
+    return ori_query
 
+def multi_queries_retrieval(ori_query):
     # Multi-query generation
-    s = time.time()
-    multi_query = chat_oepnai(ori_query, st.session_state['llm_client'], MULTI_QUERY_PROMPT, temperature=0)
+    multi_query = chat_openai(ori_query, MULTI_QUERY_PROMPT, temperature=0)
     e = time.time()
     print(f'Multi queries: {e-s} seconds')
     queries = [ori_query] + multi_query.split("\n")[1:-1]
@@ -102,7 +99,18 @@ def rag(ori_query):
     matches = st.session_state['docstore'].mget(doc_ids)
     match_list = [json.loads(match) for match in matches]
     match_list_text = [match['page_content'] for match in match_list]
-    st.text(f"已为您找到{len(match_list)}个相关来源")
+    return match_list_text
+
+def rag(ori_query):
+    # Coreference Resolution
+    s = time.time()
+    ori_query = coreference_resolution(ori_query)
+    e = time.time()
+    print(f'Coreference resolution: {ori_query}, {e-s} seconds')
+
+    # Multi-query
+    s = time.time()
+    match_list_text = multi_queries_retrieval(ori_query)
     e = time.time()
     print(f'Vector search: {e-s} seconds')
 
@@ -118,8 +126,28 @@ def rag(ori_query):
         result_text = ''.join([f'<context>{t}</context>' for t in match_list_text])
 
     # Response
+    response = chat_openai(RAG_USER_PROMPT.format(ori_query, result_text), RAG_SYSTEM_PROMPT, st.session_state['messages'])
+    return response
+
+@st.cache_resource
+def chat(ori_query):
+    # Router
     s = time.time()
-    response = chat_oepnai(RAG_USER_PROMPT.format(ori_query, result_text), st.session_state['llm_client'], RAG_SYSTEM_PROMPT, st.session_state['messages'])
+    if router_type=='embedding':
+        pass
+    else:
+        router_result = chat_openai(ROUTER_PROMPT.format(question=ori_query), temperature=0)
+        if 'Output: ' in router_result:
+            router_result = router_result.split('Output: ')[1]
+    e = time.time()
+    print(f"Router: {router_result}, {e-s} seconds")
+
+    s = time.time()
+    if router_result=='query':
+        response = rag(ori_query)
+    else:
+        response = chat_openai(ori_query, chat_history=st.session_state['messages'])
+    
     st.markdown(f"""
         {str(response)}
         <br />
@@ -155,6 +183,6 @@ if prompt := st.chat_input("您好！请问有什么可以帮助您的吗？"):
 
     # Display assistant response in chat message container
     with st.chat_message("assistant"):
-        response = rag(prompt)
+        response = chat(prompt)
     st.session_state['messages'].append({"role": "user", "content": prompt})
     st.session_state['messages'].append({"role": "assistant", "content": response})
