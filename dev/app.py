@@ -9,11 +9,18 @@ import json
 import streamlit as st
 import time
 import redis
+from langchain.output_parsers import YamlOutputParser
+
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.storage import RedisStore
+
+from semantic_router.layer import RouteLayer
+from semantic_router.encoders import OpenAIEncoder
+
 from prompt_template.prompts import *
-# from prompt_template.costar_prompts import *
+from prompt_template.costar_prompts import REPHRASING_DECISION_PROMPT, REPHRASING_PROMPT
+from utils.utils import *
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -21,7 +28,6 @@ load_dotenv()
 rerank = False
 router_type = 'llm'
 
-co = cohere.Client(os.environ['COHERE_API_KEY'])
 llm = "gpt-4o"
 reranker = 'rerank-multilingual-v3.0'
 collection_name = "summaries"
@@ -31,16 +37,6 @@ redis_port = '10020'
 redis_password = os.environ['REDIS_PASSWORD']
 top_k = 10
 doc_id_key = "doc_id"
-
-def output_parser(output, split_string='', mode='split'):
-    if mode=='split' and split_string:
-        if split_string in output:
-            return output.split(split_string)[1]
-        else:
-            print('LLM output is not in desired format')
-            return output
-    else:
-        return output
 
 def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
@@ -68,24 +64,27 @@ def initialize_chain():
     redis_client = redis.Redis(host=redis_host, port=redis_port, password=redis_password, decode_responses=True)
     docstore = RedisStore(client=redis_client)
 
+    # Load models
+    encoder = OpenAIEncoder()
+    reranker = cohere.Client(os.environ['COHERE_API_KEY'])
     llm_client = openai.Client()
-    return [vectorstore, docstore, llm_client]
+
+    # Load routers
+    routers = get_routes()
+    return [vectorstore, docstore, llm_client, encoder, reranker, routers]
 
 def coreference_resolution(ori_query):
-    user_input_history = '['
     print(f'Coreference resolution: {ori_query}')
     if st.session_state['messages']:
-        for i, item in enumerate(st.session_state['messages']):
-            if i!=0:
-                user_input_history+=', '
-            if item['role']=='user':
-                user_input_history+=f'user: {item['content']}\n'
-            elif item['role']=='assistant':
-                user_input_history+=f'assistant: {item['content']}\n'
+        user_input_history = '[' + ', '.join(
+                                f"user: {item['content']}\n" if item['role'] == 'user' else f"assistant: {item['content']}\n"
+                                for item in st.session_state['messages']
+                            ) + ']'
 
         output = chat_llm(COREFERENCE_RESOLUTION.format(history=user_input_history,
-                                                           question=ori_query),
-                             temperature=0)
+                                                        question=ori_query),
+                          temperature=0
+                          )
         ori_query = output_parser(output, 'OUTPUT QUESTION: ')
     return ori_query
 
@@ -111,51 +110,70 @@ def multi_queries_retrieval(ori_query):
     match_list_text = [match['page_content'] for match in match_list]
     return match_list_text
 
+def query_rephrase(query):
+    decision = chat_llm(REPHRASING_DECISION_PROMPT.format(chat_history=st.session_state['history'], question=query))
+    if decision=='true':
+        query = chat_llm(REPHRASING_PROMPT.format(chat_history=st.session_state['history'], question=query))
+    return query
+
 @st.spinner('Typing...')
 def rag(ori_query):
+    if st.session_state['messages']:
+        st.session_state['history'] = json.dumps(st.session_state['messages'], ensure_ascii=False)
+    # Query Rephrasing
+    s = time.time()
+    ori_query = query_rephrase(ori_query)
+    e = time.time()
+    print(f'Query rephrasing: {ori_query}, {e-s} seconds')
+
     # Coreference Resolution
     s = time.time()
     ori_query = coreference_resolution(ori_query)
     e = time.time()
     print(f'Coreference resolution: {ori_query}, {e-s} seconds')
 
-    # Multi-query
+    # RAG Router
     s = time.time()
-    match_list_text = multi_queries_retrieval(ori_query)
+    router_result = chat_llm(RAG_ROUTER_PROMPT.format(question=ori_query), chat_history=st.session_state['messages'], temperature=0)
     e = time.time()
-    print(f'Vector search: {e-s} seconds')
+    print(f"RAG Router: {router_result}, {e-s} seconds")
 
-    # Reranking
-    if rerank:
+    result_text = ''
+    if router_result=='no':
+        # Multi-query
         s = time.time()
-        results = co.rerank(model=reranker, query=ori_query, documents=match_list_text, top_n=20, return_documents=True)
-        result_text_list = [item.document.text for item in results.results]
-        result_text = ''.join(f'<context>{t}</context>' for t in result_text_list)
+        match_list_text = multi_queries_retrieval(ori_query)
         e = time.time()
-        print(f'Reranking: {e-s} seconds')
-    else:
-        result_text = ''.join(f'<context>{t}</context>' for t in match_list_text)
+        print(f'Vector search: {e-s} seconds')
+
+        # Reranking
+        if rerank:
+            s = time.time()
+            results = st.session_state['reranker'].rerank(model=reranker, query=ori_query, documents=match_list_text, top_n=20, return_documents=True)
+            result_text_list = [item.document.text for item in results.results]
+            result_text = ''.join(f'<context>{t}</context>' for t in result_text_list)
+            e = time.time()
+            print(f'Reranking: {e-s} seconds')
+        else:
+            result_text = ''.join(f'<context>{t}</context>' for t in match_list_text)
 
     # Response
     response = chat_llm(RAG_USER_PROMPT.format(ori_query, result_text), RAG_SYSTEM_PROMPT, st.session_state['messages'])
     return response
 
 def chat(ori_query):
-    # Router
+    # Query Router
     s = time.time()
-    if router_type=='embedding':
-        pass
-    else:
-        router_result = chat_llm(ROUTER_PROMPT.format(question=ori_query), chat_history=st.session_state['messages'], temperature=0)
+    router_result = chat_llm(QUERY_ROUTER_PROMPT.format(question=ori_query), chat_history=st.session_state['messages'], temperature=0)
     e = time.time()
-    print(f"Router: {router_result}, {e-s} seconds")
+    print(f"Query Router: {router_result}, {e-s} seconds")
 
     # Call RAG or directly call LLM
     s = time.time()
-    if router_result=='1':
+    if router_result=='query':
         response = rag(ori_query)
-    elif router_result=='2':
-        response = '您方便留个电话吗？我们会安排专业的置业顾问联系您！'
+        st.session_state['messages'].append({"role": "user", "content": ori_query})
+        st.session_state['messages'].append({"role": "assistant", "content": response})
     else:
         response = chat_llm(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
 
@@ -178,13 +196,14 @@ with st.chat_message("assistant"):
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state['messages'] = []
+    st.session_state['history'] = ''
 
 # Display chat messages from history on app rerun
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-sesstion_state_name = ['vectorstore', 'docstore', 'llm_client']
+sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'encoder', 'reranker', 'routers']
 init = initialize_chain()
 for name, func in zip(sesstion_state_name, init):
     st.session_state[name] = func
@@ -196,5 +215,3 @@ if prompt := st.chat_input('请在这里输入消息，点击Enter发送'):
 
     # Display assistant response in chat message container
     response = chat(prompt)
-    st.session_state['messages'].append({"role": "user", "content": prompt})
-    st.session_state['messages'].append({"role": "assistant", "content": response})
