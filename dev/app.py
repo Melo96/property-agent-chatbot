@@ -9,7 +9,8 @@ import json
 import streamlit as st
 import time
 import redis
-from langchain.output_parsers import YamlOutputParser
+from functools import partial
+from concurrent.futures import ThreadPoolExecutor
 
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
@@ -97,13 +98,14 @@ def multi_queries_retrieval(ori_query):
     queries = [ori_query] + multi_query.split("\n")[1:-1]
 
     # Get the matches for each query
-    doc_ids = set()
-    matches = []
-    for query in queries:
-        matches.extend(st.session_state['vectorstore'].max_marginal_relevance_search(query, k=top_k, lambda_mult=0.5))
-        # matches.extend(st.session_state['vectorstore'].similarity_search_with_relevance_scores(query, k=top_k, score_threshold=0.7))
+    with ThreadPoolExecutor(max_workers=max(6, os.cpu_count()//2)) as executor:
+        vectore_search_partial = partial(st.session_state['vectorstore'].similarity_search_with_relevance_scores, 
+                                        k=top_k, 
+                                        score_threshold=0.7)
+        nested_results = executor.map(vectore_search_partial, queries)
 
-    doc_ids = set(map(lambda d: d.metadata['doc_id'], matches))
+    matches = [item for sub_list in nested_results for item in sub_list]
+    doc_ids = set(map(lambda d: d[0].metadata['doc_id'], matches))
 
     matches = st.session_state['docstore'].mget(list(doc_ids))
     match_list = [json.loads(match) for match in matches]
@@ -199,7 +201,7 @@ if "messages" not in st.session_state:
     st.session_state['history'] = ''
 
 # Display chat messages from history on app rerun
-for message in st.session_state.messages:
+for message in st.session_state['messages']:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
