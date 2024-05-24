@@ -20,6 +20,7 @@ from semantic_router.layer import RouteLayer
 from semantic_router.encoders import OpenAIEncoder
 
 from prompt_template.prompts import *
+from prompt_template.response import *
 from prompt_template.costar_prompts import REPHRASING_DECISION_PROMPT, REPHRASING_PROMPT
 from utils.utils import *
 
@@ -105,20 +106,22 @@ def multi_queries_retrieval(ori_query):
         nested_results = executor.map(vectore_search_partial, queries)
 
     matches = [item for sub_list in nested_results for item in sub_list]
-    doc_ids = set(map(lambda d: d[0].metadata['doc_id'], matches))
+    match_list_text = ''
+    if matches:
+        doc_ids = set(map(lambda d: d[0].metadata['doc_id'], matches))
 
-    matches = st.session_state['docstore'].mget(list(doc_ids))
-    match_list = [json.loads(match) for match in matches]
-    match_list_text = [match['page_content'] for match in match_list]
+        matches = st.session_state['docstore'].mget(list(doc_ids))
+        match_list = [json.loads(match) for match in matches]
+        match_list_text = [match['page_content'] for match in match_list]
     return match_list_text
 
 def query_rephrase(query):
     decision = chat_llm(REPHRASING_DECISION_PROMPT.format(chat_history=st.session_state['history'], question=query))
-    if decision=='true':
+    if 'true' in decision:
         query = chat_llm(REPHRASING_PROMPT.format(chat_history=st.session_state['history'], question=query))
     return query
 
-@st.spinner('Typing...')
+@st.spinner('正在打字...')
 def rag(ori_query):
     if st.session_state['messages']:
         st.session_state['history'] = json.dumps(st.session_state['messages'], ensure_ascii=False)
@@ -141,12 +144,15 @@ def rag(ori_query):
     print(f"RAG Router: {router_result}, {e-s} seconds")
 
     result_text = ''
-    if router_result=='no':
+    if 'no' in router_result:
         # Multi-query
         s = time.time()
         match_list_text = multi_queries_retrieval(ori_query)
         e = time.time()
         print(f'Vector search: {e-s} seconds')
+
+        if not match_list_text:
+            return ''
 
         # Reranking
         if rerank:
@@ -172,23 +178,33 @@ def chat(ori_query):
 
     # Call RAG or directly call LLM
     s = time.time()
-    if router_result=='query':
+    if 'query' in router_result:
         response = rag(ori_query)
         st.session_state['messages'].append({"role": "user", "content": ori_query})
         st.session_state['messages'].append({"role": "assistant", "content": response})
     else:
         response = chat_llm(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
-
-    with st.chat_message("assistant"):
-        st.markdown(f"""
-            {str(response)}
-            <br />
-            <br />
-        """,
-        unsafe_allow_html=True
-        )
     e = time.time()
     print(f'Response: {e-s} seconds')
+
+    if response:
+        with st.chat_message("assistant"):
+            st.markdown(f"""
+                {str(response)}
+                <br />
+                <br />
+            """,
+            unsafe_allow_html=True
+            )
+    else:
+        with st.chat_message("assistant"):
+            st.write(NO_RELEVANT_FILES)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.text_input(label="姓名")
+        with col2:
+            st.text_input(label="手机号")
     return response
 
 st.title("爱房网智能客服DEMO")
