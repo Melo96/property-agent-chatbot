@@ -7,3 +7,4 @@ redis
 openai
 langchain_openai
 pysqlite3-binary
+semantic_router
