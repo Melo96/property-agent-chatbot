@@ -7,7 +7,6 @@ import openai
 import cohere
 import json
 import streamlit as st
-import time
 import redis
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor
@@ -76,7 +75,6 @@ def initialize_chain():
     return [vectorstore, docstore, llm_client, encoder, reranker, routers]
 
 def coreference_resolution(ori_query):
-    print(f'Coreference resolution: {ori_query}')
     if st.session_state['messages']:
         user_input_history = '[' + ', '.join(
                                 f"user: {item['content']}\n" if item['role'] == 'user' else f"assistant: {item['content']}\n"
@@ -92,10 +90,7 @@ def coreference_resolution(ori_query):
 
 def multi_queries_retrieval(ori_query):
     # Multi-query generation
-    s = time.time()
     multi_query = chat_llm(ori_query, MULTI_QUERY_PROMPT, st.session_state['messages'], temperature=0)
-    e = time.time()
-    print(f'Multi queries: {e-s} seconds')
     queries = [ori_query] + multi_query.split("\n")[1:-1]
 
     # Get the matches for each query
@@ -126,42 +121,27 @@ def rag(ori_query):
     if st.session_state['messages']:
         st.session_state['history'] = json.dumps(st.session_state['messages'], ensure_ascii=False)
     # Query Rephrasing
-    s = time.time()
     ori_query = query_rephrase(ori_query)
-    e = time.time()
-    print(f'Query rephrasing: {ori_query}, {e-s} seconds')
 
     # Coreference Resolution
-    s = time.time()
     ori_query = coreference_resolution(ori_query)
-    e = time.time()
-    print(f'Coreference resolution: {ori_query}, {e-s} seconds')
 
     # RAG Router
-    s = time.time()
     router_result = chat_llm(RAG_ROUTER_PROMPT.format(question=ori_query), chat_history=st.session_state['messages'], temperature=0)
-    e = time.time()
-    print(f"RAG Router: {router_result}, {e-s} seconds")
 
     result_text = ''
     if 'no' in router_result:
         # Multi-query
-        s = time.time()
         match_list_text = multi_queries_retrieval(ori_query)
-        e = time.time()
-        print(f'Vector search: {e-s} seconds')
 
         if not match_list_text:
             return ''
 
         # Reranking
         if rerank:
-            s = time.time()
             results = st.session_state['reranker'].rerank(model=reranker, query=ori_query, documents=match_list_text, top_n=20, return_documents=True)
             result_text_list = [item.document.text for item in results.results]
             result_text = ''.join(f'<context>{t}</context>' for t in result_text_list)
-            e = time.time()
-            print(f'Reranking: {e-s} seconds')
         else:
             result_text = ''.join(f'<context>{t}</context>' for t in match_list_text)
 
@@ -171,34 +151,26 @@ def rag(ori_query):
 
 def chat(ori_query):
     # Query Router
-    s = time.time()
     router_result = chat_llm(QUERY_ROUTER_PROMPT.format(question=ori_query), chat_history=st.session_state['messages'], temperature=0)
-    e = time.time()
-    print(f"Query Router: {router_result}, {e-s} seconds")
 
     # Call RAG or directly call LLM
-    s = time.time()
     if 'query' in router_result:
         response = rag(ori_query)
         st.session_state['messages'].append({"role": "user", "content": ori_query})
         st.session_state['messages'].append({"role": "assistant", "content": response})
     else:
         response = chat_llm(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
-    e = time.time()
-    print(f'Response: {e-s} seconds')
 
     if response:
-        with st.chat_message("assistant"):
-            st.markdown(f"""
-                {str(response)}
-                <br />
-                <br />
-            """,
-            unsafe_allow_html=True
-            )
+        st.markdown(f"""
+            {str(response)}
+            <br />
+            <br />
+        """,
+        unsafe_allow_html=True
+        )
     else:
-        with st.chat_message("assistant"):
-            st.write(NO_RELEVANT_FILES)
+        st.write(NO_RELEVANT_FILES)
         
         col1, col2 = st.columns(2)
         with col1:
@@ -213,11 +185,12 @@ with st.chat_message("assistant"):
 
 # Initialize chat history
 if "messages" not in st.session_state:
+    st.session_state['display_messages'] = []
     st.session_state['messages'] = []
     st.session_state['history'] = ''
 
 # Display chat messages from history on app rerun
-for message in st.session_state['messages']:
+for message in st.session_state['display_messages']:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
@@ -232,4 +205,8 @@ if prompt := st.chat_input('请在这里输入消息，点击Enter发送'):
         st.markdown(prompt)
 
     # Display assistant response in chat message container
-    response = chat(prompt)
+    with st.chat_message("assistant"):
+        response = chat(prompt)
+
+    st.session_state['display_messages'].append({"role": "user", "content": prompt})
+    st.session_state['display_messages'].append({"role": "assistant", "content": response})
