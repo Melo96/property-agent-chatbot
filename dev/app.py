@@ -1,8 +1,9 @@
-# # For streamlit cloud deployment
-# __import__('pysqlite3')
-# import sys
-# sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+# For streamlit cloud deployment
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import os
+os.environ['OPENAI_API_KEY'] = st.secrets['OPENAI_API_KEY']
 import openai
 import cohere
 import json
@@ -33,9 +34,9 @@ llm = "gpt-4o"
 reranker = 'rerank-multilingual-v3.0'
 collection_name = "summaries"
 persist_directory = "data/chroma_openai"
-redis_host = os.environ['REDIS_HOST']
+redis_host = st.secrets['REDIS_HOST']
 redis_port = '10020'
-redis_password = os.environ['REDIS_PASSWORD']
+redis_password = st.secrets['REDIS_PASSWORD']
 top_k = 10
 doc_id_key = "doc_id"
 
@@ -67,7 +68,7 @@ def initialize_chain():
 
     # Load models
     encoder = OpenAIEncoder()
-    reranker = cohere.Client(os.environ['COHERE_API_KEY'])
+    reranker = cohere.Client(st.secrets['COHERE_API_KEY'])
     llm_client = openai.Client()
 
     # Load routers
@@ -162,15 +163,17 @@ def chat(ori_query):
         response = chat_llm(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
 
     if response:
-        st.markdown(f"""
-            {str(response)}
-            <br />
-            <br />
-        """,
-        unsafe_allow_html=True
-        )
+        with st.chat_message("assistant"):
+            st.markdown(f"""
+                {str(response)}
+                <br />
+                <br />
+            """,
+            unsafe_allow_html=True
+            )
     else:
-        st.write(NO_RELEVANT_FILES)
+        with st.chat_message("assistant"):
+            st.write(NO_RELEVANT_FILES)
         
         col1, col2 = st.columns(2)
         with col1:
@@ -205,8 +208,7 @@ if prompt := st.chat_input('请在这里输入消息，点击Enter发送'):
         st.markdown(prompt)
 
     # Display assistant response in chat message container
-    with st.chat_message("assistant"):
-        response = chat(prompt)
+    response = chat(prompt)
 
     st.session_state['display_messages'].append({"role": "user", "content": prompt})
     st.session_state['display_messages'].append({"role": "assistant", "content": response})
