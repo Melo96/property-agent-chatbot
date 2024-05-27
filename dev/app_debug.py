@@ -1,7 +1,3 @@
-# # For streamlit cloud deployment
-# __import__('pysqlite3')
-# import sys
-# sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import os
 import openai
 import cohere
@@ -40,7 +36,40 @@ redis_password = os.environ['REDIS_PASSWORD']
 top_k = 10
 doc_id_key = "doc_id"
 
-def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2):
+def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0.2):
+    messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
+    if chat_history:
+        messages+=chat_history
+    messages += [{'role': 'user', 'content': user_input}]
+
+    response = st.session_state['llm_client'].chat.completions.create(
+            model=llm,
+            messages=messages,
+            temperature=temperature,
+            stream=True
+        )
+
+    message_complete = ''
+    message = ''
+    for chunk in response:
+        text = chunk.choices[0].delta.content
+        if text:
+            message_complete+=text
+            if '\n\n' in text:
+                with st.chat_message("assistant"):
+                    st.write(message)
+                st.session_state['display_messages'].append({"role": "assistant", "content": message})
+                message = ''
+            else:
+                message+=text
+    # Print last chunk of text
+    if message:
+        with st.chat_message("assistant"):
+            st.write(message)
+        st.session_state['display_messages'].append({"role": "assistant", "content": message})
+    return message_complete
+
+def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, display_textbox=False):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
     if chat_history:
         messages+=chat_history
@@ -52,6 +81,11 @@ def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2):
             temperature=temperature
         )
     message = response.choices[0].message.content
+
+    if display_textbox:
+        with st.chat_message("assistant"):
+            st.write(message)
+        st.session_state['display_messages'].append({"role": "assistant", "content": message})
     return message
 
 @st.cache_resource
@@ -99,7 +133,7 @@ def multi_queries_retrieval(ori_query):
     queries = [ori_query] + multi_query.split("\n")[1:-1]
 
     # Get the matches for each query
-    with ThreadPoolExecutor(max_workers=max(6, os.cpu_count()//2)) as executor:
+    with ThreadPoolExecutor(max_workers=6) as executor:
         vectore_search_partial = partial(st.session_state['vectorstore'].similarity_search_with_relevance_scores, 
                                         k=top_k, 
                                         score_threshold=0.7)
@@ -109,7 +143,6 @@ def multi_queries_retrieval(ori_query):
     match_list_text = ''
     if matches:
         doc_ids = set(map(lambda d: d[0].metadata['doc_id'], matches))
-
         matches = st.session_state['docstore'].mget(list(doc_ids))
         match_list = [json.loads(match) for match in matches]
         match_list_text = [match['page_content'] for match in match_list]
@@ -152,7 +185,15 @@ def rag(ori_query):
         print(f'Vector search: {e-s} seconds')
 
         if not match_list_text:
-            return ''
+            with st.chat_message("assistant"):
+                st.write(NO_RELEVANT_FILES)
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.text_input(label="姓名")
+            with col2:
+                st.text_input(label="手机号")
+            return NO_RELEVANT_FILES
 
         # Reranking
         if rerank:
@@ -166,10 +207,13 @@ def rag(ori_query):
             result_text = ''.join(f'<context>{t}</context>' for t in match_list_text)
 
     # Response
-    response = chat_llm(RAG_USER_PROMPT.format(ori_query, result_text), RAG_SYSTEM_PROMPT, st.session_state['messages'])
+    response = chat_llm_stream(RAG_USER_PROMPT.format(ori_query, result_text), RAG_SYSTEM_PROMPT, st.session_state['messages'])
     return response
 
 def chat(ori_query):
+    st.session_state['display_messages'].append({"role": "user", "content": ori_query})
+    # Limit the number of chat history
+    st.session_state['messages'] = st.session_state['messages'][:20]
     # Query Router
     s = time.time()
     router_result = chat_llm(QUERY_ROUTER_PROMPT.format(question=ori_query), chat_history=st.session_state['messages'], temperature=0)
@@ -183,28 +227,9 @@ def chat(ori_query):
         st.session_state['messages'].append({"role": "user", "content": ori_query})
         st.session_state['messages'].append({"role": "assistant", "content": response})
     else:
-        response = chat_llm(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
+        response = chat_llm_stream(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
     e = time.time()
     print(f'Response: {e-s} seconds')
-
-    if response:
-        with st.chat_message("assistant"):
-            st.markdown(f"""
-                {str(response)}
-                <br />
-                <br />
-            """,
-            unsafe_allow_html=True
-            )
-    else:
-        with st.chat_message("assistant"):
-            st.write(NO_RELEVANT_FILES)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.text_input(label="姓名")
-        with col2:
-            st.text_input(label="手机号")
     return response
 
 st.title("爱房网智能客服DEMO")
@@ -234,6 +259,3 @@ if prompt := st.chat_input('请在这里输入消息，点击Enter发送'):
 
     # Display assistant response in chat message container
     response = chat(prompt)
-
-    st.session_state['display_messages'].append({"role": "user", "content": prompt})
-    st.session_state['display_messages'].append({"role": "assistant", "content": response})
