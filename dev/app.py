@@ -208,7 +208,7 @@ def chat(ori_query):
         st.session_state['messages'].append({"role": "user", "content": ori_query})
         st.session_state['messages'].append({"role": "assistant", "content": response})
     else:
-        response = chat_llm(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'], display_textbox=True)
+        response = chat_llm_stream(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
     return response
 
 st.title("爱房网智能客服DEMO")
