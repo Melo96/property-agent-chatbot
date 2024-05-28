@@ -1,6 +1,6 @@
 SUMMARY_PROMPT = """You will be given a json file that uses Chinese to describe the attributes of a real estate. Each key represents one attribute. You task is to generate a comprehensive summary of this json file. You need to include every single attributes mentioned in the original json file. Do not change any infomation. The generated summary need to be in Chinese. Your response should be around 300 Chinese words. """
 
-QA_PAIR_PROMPT = """You will be given a json file that uses Chinese to describe the attributes of a real estate. Each key represents one attribute. You task is to generate question-answer pairs. You need to generate exactly one question-answer pair for each attribute. Do not change any infomation. The generated question-answer pairs need to be in Chinese."""
+QA_PAIR_PROMPT = """You will be given a json file that uses Chinese to describe the attributes of a real estate. Each key represents one attribute. You task is to generate exactly one question-answer pair for each attribute. Do not change any infomation. Skip attributes with empty values. The generated question-answer pairs need to be in Chinese."""
 
 QUERY_ROUTER_PROMPT = """Determine if the user's question is about real estates or not. If yes, output 'query'. If not, output 'general'. The following are a few examples. Question: 在么？Output: general. Question: 给我推荐一些房产。Output: query. Question: 那这几个里均价最低的是多少？Output: query. Question: {question} Output: """
 

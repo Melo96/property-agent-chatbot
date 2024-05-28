@@ -1,55 +1,19 @@
 import os
 import json
 import redis
-import openai
-from functools import partial
-from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.storage import RedisStore
 from langchain.schema.document import Document
 from langchain.retrievers.multi_vector import MultiVectorRetriever
-from pathlib import Path
-from prompt_template.prompts import SUMMARY_PROMPT, QA_PAIR_PROMPT
 
 from dotenv import load_dotenv
 load_dotenv()
 
-docs_path = Path("data/docs")
-docs = []
+data_save_path = Path('/Users/yangkaiwen/Documents/hypergai-chatbot/dev/data/0528')
 
-for p in docs_path.rglob("*.json"):
-    with open(p, 'r') as f:
-        doc = json.load(f)
-    docs.append(doc)
-
-client = openai.Client()
-client.chat.completions.create(temperature=0)
-
-def chat_oepnai(doc, client, system_prompt):
-    response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": 'system', "content": system_prompt},
-                    {'role': 'user', 'content': f'Json File: {json.dumps(doc, ensure_ascii=False)}. Response: '}],
-            temperature=0
-        )
-    message = response.choices[0].message.content
-    return message
-
-text_summaries = []
-qa_pairs = []
-print("Generating summaries")
-with ThreadPoolExecutor(max_workers=8) as executor:
-    gpt_partial = partial(chat_oepnai, client=client, system_prompt=SUMMARY_PROMPT)
-    text_summaries = list(executor.map(gpt_partial, docs))
-print("Generating QA pairs")
-with ThreadPoolExecutor(max_workers=8) as executor:
-    gpt_partial = partial(chat_oepnai, client=client, system_prompt=QA_PAIR_PROMPT)
-    qa_pairs = list(executor.map(gpt_partial, docs))
-print("Generation finished")
-
-# print("Generating QA pairs")
 # qa_pairs = qa_chain.batch(docs, {"max_concurrency": 8})
 
 # # Load embedding model
@@ -64,10 +28,10 @@ print("Generation finished")
 vectorstore = Chroma(
     collection_name="summaries",
     embedding_function=OpenAIEmbeddings(),
-    persist_directory="data/chroma_openai",
+    persist_directory=os.path.join(data_save_path, "chroma_openai_0528"),
 )
 host = os.environ['REDIS_HOST']
-port = '10020'
+port = '19817'
 password = os.environ['REDIS_PASSWORD']
 
 client = redis.Redis(host=host, port=port, password=password, decode_responses=True)
@@ -77,21 +41,43 @@ store = RedisStore(client=client)
 retriever = MultiVectorRetriever(
     vectorstore=vectorstore,
     docstore=store,
-    id_key="doc_id",
+    id_key="楼盘ID",
 )
 
+# Load documents
+all_files = Path('/Users/yangkaiwen/Documents/hypergai-chatbot/dev/data/0528/qa_pairs').glob('*.txt')
+
+docs = []
+qa_pairs = []
+text_summaries = []
+doc_ids = []
+
+for file in all_files:
+    doc_id = file.stem
+    with open(f'/Users/yangkaiwen/Documents/hypergai-chatbot/dev/data/0528/qa_pairs/{doc_id}.txt', 'r') as f:
+        qa_pair = f.read()
+    
+    with open(f'/Users/yangkaiwen/Documents/hypergai-chatbot/dev/data/0528/summary/{doc_id}.txt', 'r') as f:
+        summary = f.read()
+
+    with open(f'/Users/yangkaiwen/Documents/hypergai-chatbot/data/docs_0528/{doc_id}.json', 'r') as f:
+        doc = json.load(f)
+
+    qa_pairs.append(qa_pair)
+    text_summaries.append(summary)
+    doc_ids.append(doc_id)
+    docs.append(doc)
+
 # Add texts
-summary_texts = [Document(page_content=s, metadata={"doc_id": i, 
-                                                    "ori_text": json.dumps(docs[i]),
-                                                    "summary": s,
-                                                    "qa_pairs": qa_pairs[i]}) for i, s in enumerate(text_summaries)]
-qa_texts = [Document(page_content=s, metadata={"doc_id": i, 
-                                                "ori_text": json.dumps(docs[i]),
-                                                "summary": text_summaries[i],
-                                                "qa_pairs": s}) for i, s in enumerate(qa_pairs)]
-text_docs = [json.dumps({"page_content": s, "metadata": {"doc_id": i, 
-                                                        "ori_text": docs[i],
-                                                        "summary": s,
-                                                        "qa_pairs": qa_pairs[i]}}) for i, s in enumerate(text_summaries)]
+summary_texts = [Document(page_content=s, metadata={"summary": s,
+                                                    "qa_pairs": qa_pairs[i],
+                                                    **docs[i]}) for i, s in enumerate(text_summaries)]
+qa_texts = [Document(page_content=s, metadata={"summary": text_summaries[i],
+                                               "qa_pairs": s,
+                                               **docs[i]}) for i, s in enumerate(qa_pairs)]
+text_docs = [json.dumps({"page_content": s, "metadata": {"summary": s,
+                                                         "qa_pairs": qa_pairs[i],
+                                                         **docs[i]}}) for i, s in enumerate(text_summaries)]
 retriever.vectorstore.add_documents(summary_texts)
-retriever.docstore.mset(list(zip(range(len(docs)), text_docs)))
+retriever.vectorstore.add_documents(qa_texts)
+retriever.docstore.mset(list(zip(doc_ids, text_docs)))
