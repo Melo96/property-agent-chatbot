@@ -20,8 +20,6 @@ for p in docs_path.rglob("*.json"):
     docs.append(doc)
     doc_ids.append(doc['楼盘ID'])
 
-import pdb; pdb.set_trace()
-
 print(f'Number of Docs: {len(docs)}')
 
 client = openai.Client()
