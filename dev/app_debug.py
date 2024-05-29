@@ -26,17 +26,17 @@ load_dotenv()
 rerank = False
 router_type = 'llm'
 
-llm = "gpt-4o"
+
 reranker = 'rerank-multilingual-v3.0'
 collection_name = "summaries"
-persist_directory = "data/chroma_openai"
+persist_directory = "data/0528/chroma_openai_0528"
 redis_host = os.environ['REDIS_HOST']
 redis_port = '10020'
 redis_password = os.environ['REDIS_PASSWORD']
 top_k = 10
-doc_id_key = "doc_id"
+doc_id_key = "楼盘ID"
 
-def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0.2):
+def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0.2, llm="gpt-4o"):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
     if chat_history:
         messages+=chat_history
@@ -69,7 +69,7 @@ def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0
         st.session_state['display_messages'].append({"role": "assistant", "content": message})
     return message_complete
 
-def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, display_textbox=False):
+def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, display_textbox=False, llm="gpt-4o"):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
     if chat_history:
         messages+=chat_history

@@ -30,7 +30,6 @@ load_dotenv()
 rerank = False
 router_type = 'llm'
 
-llm = "gpt-4o"
 reranker = 'rerank-multilingual-v3.0'
 collection_name = "summaries"
 persist_directory = "data/chroma_openai"
@@ -40,7 +39,7 @@ redis_password = st.secrets['REDIS_PASSWORD']
 top_k = 10
 doc_id_key = "doc_id"
 
-def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0.2):
+def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0.2, llm="gpt-4o"):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
     if chat_history:
         messages+=chat_history
@@ -73,7 +72,7 @@ def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0
         st.session_state['display_messages'].append({"role": "assistant", "content": message})
     return message_complete
 
-def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, display_textbox=False):
+def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, display_textbox=False, llm="gpt-4o"):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
     if chat_history:
         messages+=chat_history
@@ -211,6 +210,7 @@ def chat(ori_query):
         response = chat_llm_stream(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
     return response
 
+# Begin of Streamlit UI Code
 st.title("爱房网智能客服DEMO")
 with st.chat_message("assistant"):
     st.write('您好！感谢您选择爱房网。我是您的专属房产咨询助手小盖。请问有什么可以帮助您的吗？')

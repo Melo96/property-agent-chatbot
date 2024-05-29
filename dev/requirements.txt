@@ -10,3 +10,4 @@ langchain_community
 pysqlite3-binary
 semantic_router
 llama-index
+boto3
