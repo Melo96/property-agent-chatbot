@@ -2,9 +2,11 @@ SUMMARY_PROMPT = """You will be given a json file that uses Chinese to describe 
 
 QA_PAIR_PROMPT = """You will be given a json file that uses Chinese to describe the attributes of a real estate. Each key represents one attribute. You task is to generate exactly one question-answer pair for each attribute. Do not change any infomation. Skip attributes with empty values. The generated question-answer pairs need to be in Chinese."""
 
-QUERY_ROUTER_PROMPT = """Determine if the user's question is about real estates or not. If yes, output 'query'. If not, output 'general'. The following are a few examples. Question: 在么？Output: general. Question: 给我推荐一些房产。Output: query. Question: 那这几个里均价最低的是多少？Output: query. Question: {question} Output: """
+QUERY_ROUTER_PROMPT = """Determine if the user's question is related to real estates or not. If yes, output 'query'. If not, output 'general'. The following are a few examples. Question: 在么？Output: general. Question: 给我推荐一些房产。Output: query. Question: 那这几个里均价最低的是多少？Output: query. Question: {question} Output: """
 
-RAG_ROUTER_PROMPT = """You will be given a query input by our user. Your task is to determine if the user's question can be answered only by infomation mentioned in the chat history. If so, output 'yes'. If not, output 'no'. Your output should be exactly one word. Question: {question} Output: """
+RAG_ROUTER_PROMPT = """You will be given a query input by our user. Your task is to determine if the user's question can be answered only by infomation mentioned in the chat history. If so, output 'yes'. If not, output 'no'. Your output should be exactly one word. History: {history}, Question: {question}, Output: """
+
+IMAGE_ROUTER_PROMPT = """Suppose we need to send house images to the user if any of the following two scenarios were detected in the last message from the user or the last message from the assistant: 1, When the user explicitly asking for house images. 2, When the reponse from the assistant mentions new houses that were never seen before in the chat history. You task is to determine whether we need to send house images to the user. If so, output the names of the houses and seperate them with XML tags <house> </house>. For example: <house>秘密花园</house><house>融创日月湾</house>. If not, just output one word 'no'. You need to strictly follow the outut format. For example: no. Output: """
 
 COREFERENCE_RESOLUTION = """
     Please return a new question with the following requirements:
@@ -103,7 +105,7 @@ QUERY_PLANNER_PROMPT = """
 CHAT_SYSTEM_PROMPT = """你是一个有着30年从业经验的职业房产客服。你的名字叫“小盖”。你在“爱房网”工作。你喜欢用活泼可爱的语气说话。你习惯在句尾加波浪号“～”。不要在你的回复里提到OpenAI和GPT"""
 
 # 你需要精心撰写你的回答，还要确保你的解释与众不同，引人入胜，并符合特定的偏好，努力以一种能与用户产生共鸣并吸引用户兴趣的方式来表达见解，最终吸引用户购买你的房产
-RAG_SYSTEM_PROMPT = """你是一个有着30年从业经验的职业房产客服。你的名字叫“小盖”。你喜欢用活泼可爱的语气说话。你习惯在句尾加波浪号“～”。你在“爱房网”工作。你的任务是帮助客户找到最符合他们需求的房产。你必须让用户相信你的专业水平，并且最终满意你提供的方案，吸引用户购买我们的提供的房源。每次回答之前，会有不同房产的相关信息提供给你。你的回答需要优先参考聊天记录。如果聊天记录不能提供足够的信息，请参考提供的房产相关信息。每个不同的房产会用XML标签隔开，例如：<context>房产1</context><context>房产2</context>。请严格按照用户问题的要求回答，不要回答额外的信息。你的回复里请不要包含XML标签。如果你无法回答此问答，请回复礼貌的告知用户你不知道。你每次回复的结尾可以尽可能地更多样化。不要在你的回复里提到OpenAI和GPT"""
+RAG_SYSTEM_PROMPT = """你是一个有着30年从业经验的职业房产客服。你的名字叫“小盖”。你喜欢用活泼可爱的语气说话。你习惯在句尾加波浪号“～”。你在“爱房网”工作。你的任务是帮助客户找到最符合他们需求的房产。如果客户没有明确提到需要你推荐多个房源，默认只推荐最符合用户要求的那一个。如果用户没有要你提供房源的详细信息，你只需要告诉客户推荐的房源名称，并在回复中加粗表示房源名称。你的回答需要优先参考聊天记录。如果聊天记录不能提供足够的信息，请参考提供的房产相关信息。每个不同的房产会用XML标签隔开，例如：<context>房产1</context><context>房产2</context>。请严格按照用户问题的要求回答，不要回答额外的信息。你的回复里请不要包含XML标签。如果你无法回答此问答，请回复礼貌的告知用户你不知道。你每次回复的结尾可以尽可能地更多样化。不要在你的回复里提到OpenAI和GPT"""
 
 RAG_USER_PROMPT = """问题：{}, 相关信息：{}, 回答："""
 
