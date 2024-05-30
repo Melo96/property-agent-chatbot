@@ -44,6 +44,8 @@ redis_password = st.secrets['REDIS_PASSWORD']
 top_k = 10
 doc_id_key = "楼盘ID"
 
+bucket_name = 'hypergai-data'
+
 def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0.2, llm="gpt-4o"):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
     if chat_history:
