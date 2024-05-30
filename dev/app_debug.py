@@ -72,7 +72,6 @@ def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0
     if message:
         with st.chat_message("assistant"):
             st.write(message)
-        print(message_complete)
         st.session_state['display_messages'].append({"role": "assistant", "content": message})
     return message_complete
 
@@ -176,6 +175,7 @@ def query_rephrase(query):
 def rag(ori_query):
     if st.session_state['messages']:
         st.session_state['history'] = json.dumps(st.session_state['messages'], ensure_ascii=False)
+        print(st.session_state['history'])
     # Query Rephrasing
     s = time.time()
     ori_query = query_rephrase(ori_query)
@@ -226,7 +226,7 @@ def rag(ori_query):
 
     # Response
     response = chat_llm_stream(RAG_USER_PROMPT.format(ori_query, result_text), RAG_SYSTEM_PROMPT, st.session_state['messages'])
-    return response
+    return response, ori_query
 
 def chat(ori_query):
     st.session_state['display_messages'].append({"role": "user", "content": ori_query})
@@ -241,14 +241,15 @@ def chat(ori_query):
     # Call RAG or directly call LLM
     s1 = time.time()
     if 'query' in router_result:
-        response = rag(ori_query)
-        st.session_state['messages'].append({"role": "user", "content": ori_query})
+        response, rephrased_query = rag(ori_query)
+        st.session_state['messages'].append({"role": "user", "content": rephrased_query})
         st.session_state['messages'].append({"role": "assistant", "content": response})
     else:
         response = chat_llm_stream(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
     
     # Get house images
     router_result = chat_llm(IMAGE_ROUTER_PROMPT, chat_history=st.session_state['messages'], temperature=0)
+    print(f'Image response router: {router_result}')
     if '<house>' in router_result:
         pattern = re.compile(r'<house>(.*?)</house>')
         houses_list = pattern.findall(router_result)
@@ -258,12 +259,15 @@ def chat(ori_query):
             if house in st.session_state['name2id']:
                 house_id = st.session_state['name2id'][house]
                 img_list = st.session_state['s3_client'].list_objects_v2(Bucket=bucket_name, Prefix=f'img_house/{house_id}')
-                for img in img_list['Contents']:
-                    img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=img['Key'])
-                    image_data = img_response['Body'].read()
+                if 'Contents' in img_list:
                     with st.chat_message("assistant"):
-                        st.image(BytesIO(image_data))
-    
+                        st.write(HOUSE_IMAGE_RESPONSE.format(house_name=house))
+                    for img in img_list['Contents']:
+                        img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=img['Key'])
+                        image_data = img_response['Body'].read()
+                        with st.chat_message("assistant"):
+                            st.image(BytesIO(image_data))
+        
     e1 = time.time()
     print(f'Response: {e1-s1} seconds')
     return response

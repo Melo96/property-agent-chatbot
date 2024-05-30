@@ -2,7 +2,7 @@ SUMMARY_PROMPT = """You will be given a json file that uses Chinese to describe 
 
 QA_PAIR_PROMPT = """You will be given a json file that uses Chinese to describe the attributes of a real estate. Each key represents one attribute. You task is to generate exactly one question-answer pair for each attribute. Do not change any infomation. Skip attributes with empty values. The generated question-answer pairs need to be in Chinese."""
 
-QUERY_ROUTER_PROMPT = """Determine if the user's question is related to real estates or not. If yes, output 'query'. If not, output 'general'. The following are a few examples. Question: 在么？Output: general. Question: 给我推荐一些房产。Output: query. Question: 那这几个里均价最低的是多少？Output: query. Question: {question} Output: """
+QUERY_ROUTER_PROMPT = """Based on the chat history, determine if the user's question is related to real estates or not. If yes, output 'query'. If not, output 'general'. The following are a few examples. Question: 在么？Output: general. Question: 给我推荐一些房产。Output: query. Question: 那这几个里均价最低的是多少？Output: query. Question: {question} Output: """
 
 RAG_ROUTER_PROMPT = """You will be given a query input by our user. Your task is to determine if the user's question can be answered only by infomation mentioned in the chat history. If so, output 'yes'. If not, output 'no'. Your output should be exactly one word. History: {history}, Question: {question}, Output: """
 
