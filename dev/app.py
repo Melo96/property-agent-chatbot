@@ -180,7 +180,7 @@ def rag(ori_query):
     ori_query = coreference_resolution(ori_query)
 
     # RAG Router
-    router_result = chat_llm(RAG_ROUTER_PROMPT.format(question=ori_query), chat_history=st.session_state['messages'], temperature=0)
+    router_result = chat_llm(RAG_ROUTER_PROMPT.format(question=ori_query, history=st.session_state['history']), temperature=0)
 
     result_text = ''
     if 'no' in router_result:
