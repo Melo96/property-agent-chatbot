@@ -2,14 +2,19 @@
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-import streamlit as st
 import os
 os.environ['OPENAI_API_KEY'] = st.secrets['OPENAI_API_KEY']
+import re
 import openai
 import cohere
 import json
+import streamlit as st
 import redis
+import boto3
+from PIL import Image
+from io import BytesIO
 from functools import partial
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 from langchain_openai import OpenAIEmbeddings
@@ -109,7 +114,18 @@ def initialize_chain():
 
     # Load routers
     routers = get_routes()
-    return [vectorstore, docstore, llm_client, encoder, reranker, routers]
+
+    # Load S3 client
+    s3_client = boto3.client(
+        's3', 
+        aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'], 
+        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
+    )
+
+    # Load name2id map
+    with open(Path(__file__).parent / "data/0528/name2id.json", 'r') as f:
+        name2id = json.load(f)
+    return [vectorstore, docstore, llm_client, encoder, reranker, routers, s3_client, name2id]
 
 def coreference_resolution(ori_query):
     if st.session_state['messages']:
@@ -133,8 +149,8 @@ def multi_queries_retrieval(ori_query):
     # Get the matches for each query
     with ThreadPoolExecutor(max_workers=6) as executor:
         vectore_search_partial = partial(st.session_state['vectorstore'].similarity_search_with_relevance_scores, 
-                                        k=top_k, 
-                                        score_threshold=0.7)
+                                         k=top_k, 
+                                         score_threshold=0.7)
         nested_results = executor.map(vectore_search_partial, queries)
 
     matches = [item for sub_list in nested_results for item in sub_list]
@@ -208,16 +224,30 @@ def chat(ori_query):
         st.session_state['messages'].append({"role": "assistant", "content": response})
     else:
         response = chat_llm_stream(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
+    # Get house images
+    router_result = chat_llm(IMAGE_ROUTER_PROMPT, chat_history=st.session_state['messages'], temperature=0)
+    if '<house>' in router_result:
+        pattern = re.compile(r'<house>(.*?)</house>')
+        houses_list = pattern.findall(router_result)
+        for house in houses_list:
+            with st.chat_message("assistant"):
+                st.write(HOUSE_IMAGE_RESPONSE.format(house_name=house))
+            if house in st.session_state['name2id']:
+                house_id = st.session_state['name2id'][house]
+                img_list = st.session_state['s3_client'].list_objects_v2(Bucket=bucket_name, Prefix=f'img_house/{house_id}')
+                for img in img_list['Contents']:
+                    img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=img['Key'])
+                    image_data = img_response['Body'].read()
+                    with st.chat_message("assistant"):
+                        st.image(BytesIO(image_data))
     return response
 
 # Begin of Streamlit UI Code
 st.title("爱房网智能客服DEMO")
-with st.chat_message("assistant"):
-    st.write('您好！感谢您选择爱房网。我是您的专属房产咨询助手小盖。请问有什么可以帮助您的吗？')
 
 # Initialize chat history
 if "messages" not in st.session_state:
-    st.session_state['display_messages'] = []
+    st.session_state['display_messages'] = [{"role": "assistant", "content": '您好！感谢您选择爱房网。我是您的专属房产咨询助手小盖。请问有什么可以帮助您的吗？'}]
     st.session_state['messages'] = []
     st.session_state['history'] = ''
 
@@ -226,7 +256,7 @@ for message in st.session_state['display_messages']:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'encoder', 'reranker', 'routers']
+sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'encoder', 'reranker', 'routers', 's3_client', 'name2id']
 init = initialize_chain()
 for name, func in zip(sesstion_state_name, init):
     st.session_state[name] = func
