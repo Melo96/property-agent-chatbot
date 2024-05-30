@@ -6,6 +6,7 @@ import streamlit as st
 import time
 import redis
 from functools import partial
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 from langchain_openai import OpenAIEmbeddings
@@ -26,12 +27,11 @@ load_dotenv()
 rerank = False
 router_type = 'llm'
 
-
 reranker = 'rerank-multilingual-v3.0'
 collection_name = "summaries"
-persist_directory = "data/0528/chroma_openai_0528"
+persist_directory = Path(__file__).parent / "data/0528/chroma_openai_0528"
 redis_host = os.environ['REDIS_HOST']
-redis_port = '10020'
+redis_port = os.environ['REDIS_PORT']
 redis_password = os.environ['REDIS_PASSWORD']
 top_k = 10
 doc_id_key = "楼盘ID"
@@ -94,7 +94,7 @@ def initialize_chain():
     vectorstore = Chroma(
         collection_name=collection_name,
         embedding_function=OpenAIEmbeddings(),
-        persist_directory=persist_directory,
+        persist_directory=str(persist_directory),
     )
     # The storage layer for the parent documents
     redis_client = redis.Redis(host=redis_host, port=redis_port, password=redis_password, decode_responses=True)
@@ -142,7 +142,7 @@ def multi_queries_retrieval(ori_query):
     matches = [item for sub_list in nested_results for item in sub_list]
     match_list_text = ''
     if matches:
-        doc_ids = set(map(lambda d: d[0].metadata['doc_id'], matches))
+        doc_ids = set(map(lambda d: d[0].metadata[doc_id_key], matches))
         matches = st.session_state['docstore'].mget(list(doc_ids))
         match_list = [json.loads(match) for match in matches]
         match_list_text = [match['page_content'] for match in match_list]
@@ -154,7 +154,7 @@ def query_rephrase(query):
         query = chat_llm(REPHRASING_PROMPT.format(chat_history=st.session_state['history'], question=query))
     return query
 
-@st.spinner('正在打字...')
+@st.spinner('正在输入...')
 def rag(ori_query):
     if st.session_state['messages']:
         st.session_state['history'] = json.dumps(st.session_state['messages'], ensure_ascii=False)
