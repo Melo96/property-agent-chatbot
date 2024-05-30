@@ -2,13 +2,13 @@
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+import streamlit as st
 import os
 os.environ['OPENAI_API_KEY'] = st.secrets['OPENAI_API_KEY']
 import re
 import openai
 import cohere
 import json
-import streamlit as st
 import redis
 import boto3
 from PIL import Image
