@@ -8,7 +8,6 @@ import time
 import redis
 import boto3
 import random
-from PIL import Image
 from io import BytesIO
 from functools import partial
 from pathlib import Path
@@ -241,7 +240,7 @@ def retrive_img(router_result):
                     st.write(img_response)
                     # Add to the dispayed chat history
                     st.session_state['display_messages'].append({"role": "assistant", "content": img_response})
-                img = random.choice(img_list['Contents'], 1)
+                img = random.choice(img_list['Contents'])
                 img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=img['Key'])
                 image_data = img_response['Body'].read()
                 with st.chat_message("assistant"):
@@ -281,6 +280,7 @@ def chat(ori_query):
     print(f'Response: {e1-s1} seconds')
     return response
 
+# Begin of Streamlit UI Code
 st.title("爱房网智能客服DEMO")
 
 # Initialize chat history
