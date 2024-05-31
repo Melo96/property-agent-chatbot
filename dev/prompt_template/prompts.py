@@ -4,9 +4,63 @@ QA_PAIR_PROMPT = """You will be given a json file that uses Chinese to describe 
 
 QUERY_ROUTER_PROMPT = """Based on the chat history, determine if the user's question is related to real estates or not. If yes, output 'query'. If not, output 'general'. The following are a few examples. Question: 在么？Output: general. Question: 给我推荐一些房产。Output: query. Question: 那这几个里均价最低的是多少？Output: query. Question: {question} Output: """
 
-RAG_ROUTER_PROMPT = """You will be given a query input by our user. Your task is to determine if the user's question can be answered only by infomation mentioned in the chat history. If so, output 'yes'. If not, output 'no'. Your output should be exactly one word. History: {history}, Question: {question}, Output: """
+RAG_ROUTER_PROMPT = """
+    You will be given a query input by our user. 
+    Your task is to determine if the user's question can be answered only by infomation mentioned in the chat history. 
+    If so, output 'yes'. If not, output 'no'. Your output should be exactly one word. Here are a few examples:
+    HISTORY:
+    []
+    NOW QUESTION: 
+    推荐两个三亚的房子?
+    SUFFICIENT?: no
+    -------------------
+    HISTORY:
+    [user: 详细介绍一下融创日月湾,
+     assistant: 融创日月湾楼盘位于海南省万宁市日月湾旅游度假区，属于万宁市区域。该楼盘目前在售，均价为24000元/平方米，主力户型建筑面积为66㎡-153㎡，现房产品。楼盘的开发商是万宁南山融创实业有限公司，物业公司为融创物业，物业费为5.8元/平方米。楼盘的预售证号为【2017】万房预字(0056)号。]
+    NOW QUESTION: 
+    融创日月湾的均价是多少?
+    SUFFICIENT?: yes
+    -------------------
+    HISTORY:
+    [user: 推荐万宁房产,
+     assistant: 根据您的需求，我推荐融创日月湾～这个楼盘位于海南省万宁市日月湾旅游度假区，交通便利，周边配套设施齐全，适合度假和居住哦～希望您喜欢这个推荐～如果需要更多信息，请随时告诉我哦～
+    NOW QUESTION: 详细介绍一下融创日月湾，
+    SUFFICIENT?: yes
+    -------------------
+    HISTORY: 
+    {history}
+    NOW QUESTION: 
+    {question}
+    SUFFICIENT?: """
 
-IMAGE_ROUTER_PROMPT = """Suppose we need to send house images to the user if any of the following two scenarios were detected in the last message from the user or the last message from the assistant: 1, When the user explicitly asking for house images. 2, When the reponse from the assistant mentions new houses that were never seen before in the chat history. You task is to determine whether we need to send house images to the user. If so, output the names of the houses and seperate them with XML tags <house> </house>. For example: <house>秘密花园</house><house>融创日月湾</house>. If not, just output one word 'no'. You need to strictly follow the outut format. For example: no. Output: """
+IMAGE_ROUTER_PROMPT = """
+    Suppose we need to send house images to the user if any of the following two scenarios were detected in the last message from the user or the last message from the assistant: 
+    1, When the user explicitly asking for house images. 
+    2, When the assistant mentions a new house that were never seen before in the chat history. 
+    You task is to determine whether we need to send house images to the user. 
+    If so, output the names of the houses and seperate them with XML tags <house> </house>. 
+    If not, just output one word 'empty'. 
+    Here are a few examples:
+    HISTORY:
+    [user: 请推荐三亚的房产,
+     assistant: 好的呀～我再推荐一个三亚的房产给您哦～这个项目是**鲁能三亚湾港湾二区**，位于三亚市天涯区，交通便利，周边配套设施齐全，适合各种需求的购房者哦～希望您喜欢这个推荐～如果需要更多信息，随时告诉我哦～]
+    THOUGHT: 最新的回复中提到**鲁能三亚湾港湾二区**，此前没有提到这个楼盘，因此需要给用户发送户型图。
+    NEED IMAGE: yes
+    OUTPUT:  <house>鲁能三亚湾港湾二区</house>
+    -------------------
+    HISTORY:
+    [user: 请推荐三亚的房产,
+     assistant: 好的呀～我再推荐一个三亚的房产给您哦～这个项目是**鲁能三亚湾港湾二区**，位于三亚市天涯区，交通便利，周边配套设施齐全，适合各种需求的购房者哦～希望您喜欢这个推荐～如果需要更多信息，随时告诉我哦～,
+     assistant: 下面给您展示一些鲁能三亚湾港湾二区的简介和户型图，您可以参考看看～,
+     user: 鲁能三亚湾港湾二区的均价是多少？,
+     assistant: 鲁能三亚湾港湾二区的均价大约是每平方米3万元左右哦～具体价格可能会根据楼层、朝向和户型有所不同～如果您需要更详细的信息或有其他问题，请随时告诉我哦～希望这个信息对您有帮助～]
+    THOUGHT: 最新回复中没有提到新的楼盘，因此不需要给用户发送户型图
+    NEED IMAGE: no
+    OUTPUT: empty
+    -------------------
+    HISTORY:
+    {history}
+    THOUGHT: """
 
 COREFERENCE_RESOLUTION = """
     Please return a new question with the following requirements:
@@ -15,8 +69,8 @@ COREFERENCE_RESOLUTION = """
     Think step by step before you generate the new question.
     Here are a few examples:
     HISTORY:
-    [Q: 给我推荐几套三亚的房产,
-     A: 根据您的需求，我推荐以下几套位于三亚的房产：
+    [user: 给我推荐几套三亚的房产,
+     assistant: 根据您的需求，我推荐以下几套位于三亚的房产：
         1.三亚繁华里
         2.君和君泰
         3.三亚中央公馆
@@ -28,8 +82,8 @@ COREFERENCE_RESOLUTION = """
     OUTPUT QUESTION: “三亚繁华里”，“君和君泰”，“三亚中央公馆”和“三亚凤凰苑”里哪些适合养老度假？
     -------------------
     HISTORY:
-    [Q: 给我推荐几套三亚的房产,
-     A: 根据您的需求，我推荐以下几套位于三亚的房产：
+    [user: 给我推荐几套三亚的房产,
+     assistant: 根据您的需求，我推荐以下几套位于三亚的房产：
         1.三亚繁华里
         2.君和君泰
         3.三亚中央公馆
@@ -41,15 +95,15 @@ COREFERENCE_RESOLUTION = """
     OUTPUT QUESTION: 再给我推荐多几个
     -------------------
     HISTORY:
-    [Q: 给我推荐几套三亚的房产,
-     A: 根据您的需求，我推荐以下几套位于三亚的房产：
+    [user: 给我推荐几套三亚的房产,
+     assistant: 根据您的需求，我推荐以下几套位于三亚的房产：
         1.三亚繁华里
         2.君和君泰
         3.三亚中央公馆
         4.三亚凤凰苑
         这几套房产各具特色，您可以根据自己的需求和预算进行选择。如果需要更多信息或有其他问题，请随时联系我。
-     Q: 这些房产里哪些带精装修？,
-     A: 根据提供的信息，以下房产带有精装修：
+     user: 这些房产里哪些带精装修？,
+     assistant: 根据提供的信息，以下房产带有精装修：
         1.三亚繁华里：简装
         2.君和君泰：精装修
         3.三亚中央公馆：未提及
