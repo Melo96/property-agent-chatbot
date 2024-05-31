@@ -168,11 +168,6 @@ def query_rephrase(query):
 
 @st.spinner('正在输入...')
 def rag(ori_query):
-    if st.session_state['messages']:
-        st.session_state['history'] = '[' + ',\n'.join(
-                                      f"user: {item['content']}" if item['role'] == 'user' else f"assistant: {item['content']}"
-                                      for item in st.session_state['messages']
-                                    ) + ']'
     # Query Rephrasing
     ori_query = query_rephrase(ori_query)
 
@@ -245,10 +240,15 @@ def chat(ori_query):
         # Add rephrased query and llm response to the chat history
         st.session_state['messages'].append({"role": "user", "content": rephrased_query})
         st.session_state['messages'].append({"role": "assistant", "content": response})
+        # Update chat history
+        st.session_state['history'] = '[' + ',\n'.join(
+                                      f"user: {item['content']}" if item['role'] == 'user' else f"assistant: {item['content']}"
+                                      for item in st.session_state['messages']
+                                    ) + ']'
     else:
         response = chat_llm_stream(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
     # Get house images
-    router_result = chat_llm(IMAGE_ROUTER_PROMPT, chat_history=st.session_state['messages'], temperature=0)
+    router_result = chat_llm(IMAGE_ROUTER_PROMPT.format(history=st.session_state['history']), temperature=0)
     router_result = output_parser(router_result, 'OUTPUT:')
     if '<house>' in router_result:
         retrive_img(router_result)
