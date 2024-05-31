@@ -241,7 +241,7 @@ def retrive_img(router_result):
                     st.write(img_response)
                     # Add to the dispayed chat history
                     st.session_state['display_messages'].append({"role": "assistant", "content": img_response})
-                img = random.sample(img_list['Contents'], 1)[0]
+                img = random.choice(img_list['Contents'], 1)
                 img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=img['Key'])
                 image_data = img_response['Body'].read()
                 with st.chat_message("assistant"):
