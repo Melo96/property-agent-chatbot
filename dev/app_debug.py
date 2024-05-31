@@ -246,7 +246,7 @@ def chat(ori_query):
     # Add the original query to the dispayed chat history
     st.session_state['display_messages'].append({"role": "user", "content": ori_query})
     # Limit the number of chat history
-    st.session_state['messages'] = st.session_state['messages'][:20]
+    st.session_state['messages'] = st.session_state['messages'][:10]
     # Query Router
     s = time.time()
     router_result = chat_llm(QUERY_ROUTER_PROMPT.format(question=ori_query), chat_history=st.session_state['messages'], temperature=0)
