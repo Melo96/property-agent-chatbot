@@ -7,6 +7,7 @@ import streamlit as st
 import time
 import redis
 import boto3
+import random
 from PIL import Image
 from io import BytesIO
 from functools import partial
@@ -262,11 +263,12 @@ def chat(ori_query):
                 if 'Contents' in img_list:
                     with st.chat_message("assistant"):
                         st.write(HOUSE_IMAGE_RESPONSE.format(house_name=house))
-                    for img in img_list['Contents']:
-                        img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=img['Key'])
-                        image_data = img_response['Body'].read()
-                        with st.chat_message("assistant"):
-                            st.image(BytesIO(image_data))
+
+                    img = random.choice(img_list['Contents'])
+                    img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=img['Key'])
+                    image_data = img_response['Body'].read()
+                    with st.chat_message("assistant"):
+                        st.image(BytesIO(image_data))
         
     e1 = time.time()
     print(f'Response: {e1-s1} seconds')
