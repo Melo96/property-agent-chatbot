@@ -191,7 +191,7 @@ def rag(ori_query):
                 st.text_input(label="姓名")
             with col2:
                 st.text_input(label="手机号")
-            return NO_RELEVANT_FILES
+            return NO_RELEVANT_FILES, ori_query
 
         # Reranking
         if rerank:
