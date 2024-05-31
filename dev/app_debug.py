@@ -148,7 +148,7 @@ def multi_queries_retrieval(ori_query):
     with ThreadPoolExecutor(max_workers=len(queries)) as executor:
         vectore_search_partial = partial(st.session_state['vectorstore'].similarity_search_with_relevance_scores, 
                                          k=top_k, 
-                                         score_threshold=1)
+                                         score_threshold=0.7)
         nested_results = executor.map(vectore_search_partial, queries)
 
     matches = [item for sub_list in nested_results for item in sub_list]
