@@ -92,6 +92,7 @@ def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, dis
             temperature=temperature
         )
     message = response.choices[0].message.content
+
     if display_textbox:
         with st.chat_message("assistant"):
             st.write(message)
@@ -157,7 +158,6 @@ def multi_queries_retrieval(ori_query):
     match_list_text = ''
     if matches:
         doc_ids = set(map(lambda d: d[0].metadata[doc_id_key], matches))
-
         matches = st.session_state['docstore'].mget(list(doc_ids))
         match_list = [json.loads(match) for match in matches]
         match_list_text = [match['page_content'] for match in match_list]
@@ -235,7 +235,7 @@ def retrive_img(history):
         for house in houses_list:
             if house in st.session_state['name2id']: # 
                 house_id = st.session_state['name2id'][house]
-                img_list = st.session_state['s3_client'].list_objects_v2(Bucket=bucket_name, Prefix=f'img_house/{house_id}')
+                img_list = st.session_state['s3_client'].list_objects_v2(Bucket=bucket_name, Prefix=f'img_house/{house_id}/')
                 if 'Contents' in img_list:
                     with st.chat_message("assistant"):
                         img_response = HOUSE_IMAGE_RESPONSE.format(house_name=house)
