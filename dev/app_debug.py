@@ -64,7 +64,7 @@ def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0
             message_complete+=text
             if '\n\n' in text:
                 with st.chat_message("assistant"):
-                    st.write(message)
+                    st.write(message, unsafe_allow_html=True)
                 st.session_state['display_messages'].append({"role": "assistant", "content": message})
                 message = ''
             else:
@@ -72,7 +72,7 @@ def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0
     # Print last chunk of text
     if message:
         with st.chat_message("assistant"):
-            st.write(message)
+            st.write(message, unsafe_allow_html=True)
         st.session_state['display_messages'].append({"role": "assistant", "content": message})
     return message_complete
 
@@ -270,7 +270,7 @@ def chat(ori_query):
     # Add the original query to the dispayed chat history
     st.session_state['display_messages'].append({"role": "user", "content": ori_query})
     # Limit the number of chat history
-    st.session_state['messages'] = st.session_state['messages'][:10]
+    st.session_state['messages'] = st.session_state['messages'][-10:]
 
     # Query Router
     s = time.time()
