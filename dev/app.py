@@ -133,6 +133,40 @@ def initialize_chain():
         name2id = json.load(f)
     return [vectorstore, docstore, llm_client, reranker, image_router, s3_client, name2id]
 
+def retrive_img(history):
+    router_result = chat_llm(IMAGE_ROUTER_PROMPT.format(history=history), temperature=0)
+    router_result = output_parser(router_result, 'OUTPUT:')
+    print(f'Image response router: {router_result}')
+    pattern = re.compile(r'<house>(.*?)</house>')
+    houses_list = pattern.findall(router_result)
+    if houses_list:
+        for house in houses_list:
+            if house in st.session_state['name2id']: # 
+                house_id = st.session_state['name2id'][house]
+                img_list = st.session_state['s3_client'].list_objects_v2(Bucket=bucket_name, Prefix=f'img_house/{house_id}/')
+                if 'Contents' in img_list:
+                    with st.chat_message("assistant"):
+                        img_response = HOUSE_IMAGE_RESPONSE.format(house_name=house)
+                        st.write(img_response)
+                        # Add to the dispayed chat history
+                        st.session_state['display_messages'].append({"role": "assistant", "content": img_response})
+                    img = random.choice(img_list['Contents'])
+                    img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=img['Key'])
+                    image_data = img_response['Body'].read()
+                    with st.chat_message("assistant"):
+                        st.image(BytesIO(image_data))
+                        # Add the image to the dispayed chat history
+                        st.session_state['display_messages'].append({"role": "image", "content": image_data})
+                else:
+                    with st.chat_message("assistant"):
+                        st.write(f'{house}暂时没有对应的户型图哦～')
+            else:
+                with st.chat_message("assistant"):
+                    st.write(f'{house}暂时没有对应的户型图哦～')
+        return True
+    else:
+        return False
+
 def coreference_resolution(ori_query):
     if st.session_state['messages']:
         output = chat_llm(COREFERENCE_RESOLUTION.format(history=st.session_state['history'],
@@ -222,42 +256,9 @@ def rag(ori_query):
                                     for item in st.session_state['messages']
                                 ) + ']'
 
-    # Get house images
-    print(f'History: {st.session_state['history']}')
-    retrive_img(st.session_state['history'])
-def retrive_img(history):
-    router_result = chat_llm(IMAGE_ROUTER_PROMPT.format(history=history), temperature=0)
-    router_result = output_parser(router_result, 'OUTPUT:')
-    print(f'Image response router: {router_result}')
-    pattern = re.compile(r'<house>(.*?)</house>')
-    houses_list = pattern.findall(router_result)
-    if houses_list:
-        for house in houses_list:
-            if house in st.session_state['name2id']: # 
-                house_id = st.session_state['name2id'][house]
-                img_list = st.session_state['s3_client'].list_objects_v2(Bucket=bucket_name, Prefix=f'img_house/{house_id}/')
-                if 'Contents' in img_list:
-                    with st.chat_message("assistant"):
-                        img_response = HOUSE_IMAGE_RESPONSE.format(house_name=house)
-                        st.write(img_response)
-                        # Add to the dispayed chat history
-                        st.session_state['display_messages'].append({"role": "assistant", "content": img_response})
-                    img = random.choice(img_list['Contents'])
-                    img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=img['Key'])
-                    image_data = img_response['Body'].read()
-                    with st.chat_message("assistant"):
-                        st.image(BytesIO(image_data))
-                        # Add the image to the dispayed chat history
-                        st.session_state['display_messages'].append({"role": "image", "content": image_data})
-                else:
-                    with st.chat_message("assistant"):
-                        st.write(f'{house}暂时没有对应的户型图哦～')
-            else:
-                with st.chat_message("assistant"):
-                    st.write(f'{house}暂时没有对应的户型图哦～')
-        return True
-    else:
-        return False
+    # # Get house images
+    # print(f'History: {st.session_state['history']}')
+    # retrive_img(st.session_state['history'])
 
 def chat(ori_query):
     # Add the original query to the dispayed chat history
