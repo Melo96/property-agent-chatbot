@@ -205,8 +205,8 @@ def query_rephrase(query):
 
 @st.spinner('正在输入...')
 def rag(ori_query):
-    # Query Rephrasing
-    ori_query = query_rephrase(ori_query)
+    # # Query Rephrasing
+    # ori_query = query_rephrase(ori_query)
 
     # Coreference Resolution
     ori_query = coreference_resolution(ori_query)
