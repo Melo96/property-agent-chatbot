@@ -7,31 +7,33 @@ QUERY_ROUTER_PROMPT = """Based on the chat history, determine if the user's ques
 RAG_ROUTER_PROMPT = """
     You will be given a query input by our user. 
     Your task is to determine if the user's question can be answered only by infomation mentioned in the chat history. 
+    Think step by step before you generate the new question.
     If so, output 'yes'. If not, output 'no'. Your output should be exactly one word. Here are a few examples:
     HISTORY:
     []
-    NOW QUESTION: 
-    推荐两个三亚的房子?
+    NOW QUESTION: 推荐两个三亚的房子?
+    THOUGHT: 聊天历史为空，因此没有足够的信息来回答
     SUFFICIENT?: no
     -------------------
     HISTORY:
     [user: 详细介绍一下融创日月湾,
      assistant: 融创日月湾楼盘位于海南省万宁市日月湾旅游度假区，属于万宁市区域。该楼盘目前在售，均价为24000元/平方米，主力户型建筑面积为66㎡-153㎡，现房产品。楼盘的开发商是万宁南山融创实业有限公司，物业公司为融创物业，物业费为5.8元/平方米。楼盘的预售证号为【2017】万房预字(0056)号。]
-    NOW QUESTION: 
-    融创日月湾的均价是多少?
+    NOW QUESTION: 融创日月湾的均价是多少?
+    THOUGHT: 聊天历史中有提到融创日月湾的均价，因此信息足够
     SUFFICIENT?: yes
     -------------------
     HISTORY:
     [user: 推荐万宁房产,
      assistant: 根据您的需求，我推荐融创日月湾～这个楼盘位于海南省万宁市日月湾旅游度假区，交通便利，周边配套设施齐全，适合度假和居住哦～希望您喜欢这个推荐～如果需要更多信息，请随时告诉我哦～
     NOW QUESTION: 详细介绍一下融创日月湾，
-    SUFFICIENT?: yes
+    THOUGHT: 上文有提到融创日月湾，但并没有详细信息，因此信息并不足够
+    SUFFICIENT?: no
     -------------------
     HISTORY: 
     {history}
     NOW QUESTION: 
     {question}
-    SUFFICIENT?: """
+    THOUGHT: """
 
 IMAGE_ROUTER_PROMPT = """
     Suppose we need to send house images to the user if any of the following two scenarios were detected in the last message from the user or the last message from the assistant: 
@@ -40,6 +42,7 @@ IMAGE_ROUTER_PROMPT = """
     You task is to determine whether we need to send house images to the user. 
     If so, output the names of the houses and seperate them with XML tags <house> </house>. 
     If not, just output one word 'empty'. 
+    You should not include the following words in your output as the house name: '楼盘'
     Here are a few examples:
     HISTORY:
     [user: 请推荐三亚的房产,
@@ -88,7 +91,7 @@ COREFERENCE_RESOLUTION = """
         2.君和君泰
         3.三亚中央公馆
         4.三亚凤凰苑
-        这几套房产各具特色，您可以根据自己的需求和预算进行选择。如果需要更多信息或有其他问题，请随时联系我。
+        这几套房产各具特色，您可以根据自己的需求和预算进行选择。如果需要更多信息或有其他问题，请随时联系我。]
     NOW QUESTION: 再给我推荐多几个
     THOUGHT: 用户问题中没有指代。所以不需要替换
     NEED COREFERENCE RESOLUTION: No
