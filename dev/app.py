@@ -220,6 +220,7 @@ def rag(ori_query):
 
     # RAG Router
     router_result = chat_llm(RAG_ROUTER_PROMPT.format(question=ori_query, history=st.session_state['history']), temperature=0)
+    router_result = output_parser(router_result, 'SUFFICIENT?: ')
 
     result_text = ''
     if 'no' in router_result:
