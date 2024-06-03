@@ -129,10 +129,12 @@ def initialize_chain():
         name2id = json.load(f)
     return [vectorstore, docstore, llm_client, reranker, image_router, s3_client, name2id]
 
-def retrive_img(history):
-    router_result = chat_llm(IMAGE_ROUTER_PROMPT.format(history=history), temperature=0)
-    router_result = output_parser(router_result, 'OUTPUT:')
+def retrive_img(query):
+    router_result = chat_llm(IMAGE_ROUTER_PROMPT.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False), 
+                                                        question=query), 
+                                                        temperature=0)
     print(f'Image response router: {router_result}')
+    router_result = output_parser(router_result, 'OUTPUT:')
     pattern = re.compile(r'<house>(.*?)</house>')
     houses_list = pattern.findall(router_result)
     if houses_list:
@@ -156,22 +158,11 @@ def retrive_img(history):
                 else:
                     with st.chat_message("assistant"):
                         st.write(f'{house}暂时没有对应的户型图哦～')
-            else:
-                with st.chat_message("assistant"):
-                    st.write(f'{house}暂时没有对应的户型图哦～')
-        return True
+                        st.session_state['display_messages'].append({"role": "assistant", "content": f'{house}暂时没有对应的户型图哦～'})
     else:
-        return False
-
-def coreference_resolution(ori_query):
-    if st.session_state['messages']:
-        import pdb; pdb.set_trace()
-        output = chat_llm(COREFERENCE_RESOLUTION.format(history=st.session_state['history'],
-                                                        question=ori_query),
-                          temperature=0
-                          )
-        ori_query = output_parser(output, 'OUTPUT QUESTION: ')
-    return ori_query
+        with st.chat_message("assistant"):
+            st.write(HOUSE_IMAGE_NOE_FOUND_RESPONSE)
+            st.session_state['display_messages'].append({"role": "assistant", "content": HOUSE_IMAGE_NOE_FOUND_RESPONSE})
 
 def multi_queries_retrieval(ori_query):
     # Multi-query generation
@@ -200,9 +191,9 @@ def multi_queries_retrieval(ori_query):
     return match_list_text
 
 def query_rephrase(query):
-    decision = chat_llm(REPHRASING_DECISION_PROMPT.format(chat_history=st.session_state['history'], question=query))
+    decision = chat_llm(REPHRASING_DECISION_PROMPT.format(chat_history=json.dumps(st.session_state['messages'], ensure_ascii=False), question=query))
     if 'true' in decision:
-        query = chat_llm(REPHRASING_PROMPT.format(chat_history=st.session_state['history'], question=query))
+        query = chat_llm(REPHRASING_PROMPT.format(chat_history=json.dumps(st.session_state['messages'], ensure_ascii=False), question=query))
     return query
 
 @st.spinner('正在输入...')
@@ -214,24 +205,30 @@ def rag(ori_query):
     # print(f'Query rephrasing: {ori_query}, {e-s} seconds')
 
     # Coreference Resolution
-    s = time.time()
-    ori_query = coreference_resolution(ori_query)
-    e = time.time()
-    print(f'Coreference resolution: {ori_query}, {e-s} seconds')
+    if st.session_state['messages']:
+        s = time.time()
+        output = chat_llm(COREFERENCE_RESOLUTION.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False),
+                                                        question=ori_query),
+                          temperature=0
+                          )
+        e = time.time()
+        print(f'Coreference resolution: {output}, {e-s} seconds')
+        ori_query = output_parser(output, 'OUTPUT QUESTION: ')
 
     # Image Router
     router_result = st.session_state['image_router'](ori_query)
     if router_result.name=='image':
-        status = retrive_img(f'[user: {ori_query}]')
-        # If found images, break the pipeline
-        if status:
-            return
+        retrive_img(ori_query)
+        return
 
     # RAG Router
     s = time.time()
-    router_result = chat_llm(RAG_ROUTER_PROMPT.format(question=ori_query, history=st.session_state['history']), temperature=0)
+    router_result = chat_llm(RAG_ROUTER_PROMPT.format(question=ori_query, 
+                                                      history=json.dumps(st.session_state['messages'], ensure_ascii=False)), 
+                                                      temperature=0)
     e = time.time()
     print(f"RAG Router: {router_result}, {e-s} seconds")
+    router_result = output_parser(router_result, 'SUFFICIENT?: ')
 
     result_text = ''
     if 'no' in router_result:
@@ -268,15 +265,6 @@ def rag(ori_query):
     # Add rephrased query and llm response to the chat history
     st.session_state['messages'].append({"role": "user", "content": ori_query})
     st.session_state['messages'].append({"role": "assistant", "content": response})
-    # Update chat history
-    st.session_state['history'] = '[' + ',\n'.join(
-                                    f"user: {item['content']}" if item['role'] == 'user' else f"assistant: {item['content']}"
-                                    for item in st.session_state['messages']
-                                ) + ']'
-
-    # # Get house images
-    # print(f'History: {st.session_state['history']}')
-    # retrive_img(st.session_state['history'])
 
 def chat(ori_query):
     # Add the original query to the dispayed chat history
@@ -307,7 +295,6 @@ st.title("爱房网智能客服DEMO")
 if "messages" not in st.session_state:
     st.session_state['display_messages'] = [{"role": "assistant", "content": '您好！感谢您选择爱房网。我是您的专属房产咨询助手小盖。请问有什么可以帮助您的吗？'}]
     st.session_state['messages'] = []
-    st.session_state['history'] = '[]'
 
 # Display chat messages from history on app rerun
 for message in st.session_state['display_messages']:
