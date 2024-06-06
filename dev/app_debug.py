@@ -64,7 +64,7 @@ def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0
             message_complete+=text
             if '\n\n' in text:
                 with st.chat_message("assistant"):
-                    st.write(message, unsafe_allow_html=True)
+                    st.markdown(message, unsafe_allow_html=True)
                 st.session_state['display_messages'].append({"role": "assistant", "content": message})
                 message = ''
             else:
@@ -260,8 +260,9 @@ def rag(ori_query):
             result_text = ''.join(f'<context>{t}</context>' for t in match_list_text)
 
     # Response
-    response = chat_llm_stream(RAG_USER_PROMPT.format(ori_query, result_text), RAG_SYSTEM_PROMPT, st.session_state['messages'])
+    response = chat_llm_stream(RAG_USER_PROMPT.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
 
+    print(response)
     # Add rephrased query and llm response to the chat history
     st.session_state['messages'].append({"role": "user", "content": ori_query})
     st.session_state['messages'].append({"role": "assistant", "content": response})
@@ -318,5 +319,6 @@ if prompt := st.chat_input('请在这里输入消息，点击Enter发送'):
     # Display assistant response in chat message container
     try:
         chat(prompt)
-    except:
+    except Exception as e:
         st.error(ERROR_RESPONSE)
+        print(e)
