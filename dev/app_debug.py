@@ -262,7 +262,6 @@ def rag(ori_query):
     # Response
     response = chat_llm_stream(RAG_USER_PROMPT.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
 
-    print(response)
     # Add rephrased query and llm response to the chat history
     st.session_state['messages'].append({"role": "user", "content": ori_query})
     st.session_state['messages'].append({"role": "assistant", "content": response})
