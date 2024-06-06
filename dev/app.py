@@ -200,16 +200,9 @@ def rag(ori_query):
     # # Query Rephrasing
     # ori_query = query_rephrase(ori_query)
 
-    # Coreference Resolution
-    if st.session_state['messages']:
-        output = chat_llm(COREFERENCE_RESOLUTION.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False),
-                                                        question=ori_query),
-                          temperature=0
-                          )
-        ori_query = output_parser(output, 'OUTPUT QUESTION: ')
     # Image Router
     router_result = st.session_state['image_router'](ori_query)
-    if router_result.name=='image':
+    if '图' in ori_query and router_result.name=='image':
         retrive_img(ori_query)
         return
 
@@ -254,8 +247,19 @@ def chat(ori_query):
     st.session_state['display_messages'].append({"role": "user", "content": ori_query})
     # Limit the number of chat history
     st.session_state['messages'] = st.session_state['messages'][-10:]
+    # Coreference Resolution
+    if st.session_state['messages']:
+        output = chat_llm(COREFERENCE_RESOLUTION.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False),
+                                                        question=ori_query),
+                          temperature=0
+                          )
+        ori_query = output_parser(output, 'OUTPUT QUESTION: ')
     # Query Router
-    router_result = chat_llm(QUERY_ROUTER_PROMPT.format(question=ori_query), chat_history=st.session_state['messages'], temperature=0)
+    router_result = chat_llm(QUERY_ROUTER_PROMPT.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False), 
+                                                        question=ori_query), 
+                             temperature=0
+                            )
+    router_result = output_parser(router_result, 'OUTPUT:')
 
     # Call RAG or directly call LLM
     if 'query' in router_result:

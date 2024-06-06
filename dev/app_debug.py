@@ -204,20 +204,11 @@ def rag(ori_query):
     # e = time.time()
     # print(f'Query rephrasing: {ori_query}, {e-s} seconds')
 
-    # Coreference Resolution
-    if st.session_state['messages']:
-        s = time.time()
-        output = chat_llm(COREFERENCE_RESOLUTION.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False),
-                                                        question=ori_query),
-                          temperature=0
-                          )
-        e = time.time()
-        print(f'Coreference resolution: {output}, {e-s} seconds')
-        ori_query = output_parser(output, 'OUTPUT QUESTION: ')
-
     # Image Router
     router_result = st.session_state['image_router'](ori_query)
-    if router_result.name=='image':
+    print(f'Image router: {router_result}, {ori_query}')
+
+    if '图' in ori_query and router_result.name=='image':
         retrive_img(ori_query)
         return
 
@@ -272,11 +263,26 @@ def chat(ori_query):
     # Limit the number of chat history
     st.session_state['messages'] = st.session_state['messages'][-10:]
 
+    # Coreference Resolution
+    if st.session_state['messages']:
+        s = time.time()
+        output = chat_llm(COREFERENCE_RESOLUTION.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False),
+                                                        question=ori_query),
+                          temperature=0
+                        )
+        e = time.time()
+        print(f'Coreference resolution: {output}, {e-s} seconds')
+        ori_query = output_parser(output, 'OUTPUT QUESTION: ')
+
     # Query Router
     s = time.time()
-    router_result = chat_llm(QUERY_ROUTER_PROMPT.format(question=ori_query), chat_history=st.session_state['messages'], temperature=0)
+    router_result = chat_llm(QUERY_ROUTER_PROMPT.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False), 
+                                                        question=ori_query), 
+                             temperature=0
+                            )
     e = time.time()
     print(f"Query Router: {router_result}, {e-s} seconds")
+    router_result = output_parser(router_result, 'OUTPUT:')
 
     # Call RAG or directly call LLM
     s1 = time.time()
@@ -316,8 +322,4 @@ if prompt := st.chat_input('请在这里输入消息，点击Enter发送'):
         st.markdown(prompt)
 
     # Display assistant response in chat message container
-    try:
-        chat(prompt)
-    except Exception as e:
-        st.error(ERROR_RESPONSE)
-        print(e)
+    chat(prompt)
