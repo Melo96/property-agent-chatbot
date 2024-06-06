@@ -163,6 +163,10 @@ def retrive_img(query):
                     with st.chat_message("assistant"):
                         st.write(f'{house}暂时没有对应的户型图哦～')
                         st.session_state['display_messages'].append({"role": "assistant", "content": f'{house}暂时没有对应的户型图哦～'})
+            else:
+                    with st.chat_message("assistant"):
+                        st.write(f'{house}暂时没有对应的户型图哦～')
+                        st.session_state['display_messages'].append({"role": "assistant", "content": f'{house}暂时没有对应的户型图哦～'})
     else:
         with st.chat_message("assistant"):
             st.write(HOUSE_IMAGE_NOE_FOUND_RESPONSE)
