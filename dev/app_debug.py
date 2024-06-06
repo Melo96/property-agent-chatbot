@@ -255,7 +255,11 @@ def rag(ori_query):
             result_text = ''.join(f'<context>{t}</context>' for t in match_list_text)
 
     # Response
-    response = chat_llm_stream(RAG_USER_PROMPT.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
+    print(len(st.session_state['messages']))
+    if len(st.session_state['messages'])>=6:
+        response = chat_llm_stream(RAG_USER_PROMPT.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
+    else:
+        response = chat_llm_stream(RAG_USER_PROMPT_EARLY.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
 
     # Add rephrased query and llm response to the chat history
     st.session_state['messages'].append({"role": "user", "content": ori_query})
