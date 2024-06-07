@@ -228,12 +228,7 @@ def rag(ori_query):
         if not match_list_text:
             with st.chat_message("assistant"):
                 st.write(NO_RELEVANT_FILES)
-
-            col1, col2 = st.columns(2)
-            with col1:
-                st.text_input(label="姓名")
-            with col2:
-                st.text_input(label="手机号")
+            return
 
         # Reranking
         if rerank:
