@@ -204,12 +204,6 @@ def rag(ori_query):
     # # Query Rephrasing
     # ori_query = query_rephrase(ori_query)
 
-    # Image Router
-    router_result = st.session_state['image_router'](ori_query)
-    if '图' in ori_query and router_result.name=='image':
-        retrive_img(ori_query)
-        return
-
     # RAG Router
     router_result = chat_llm(RAG_ROUTER_PROMPT.format(question=ori_query, 
                                                       history=json.dumps(st.session_state['messages'], ensure_ascii=False)), 
@@ -261,6 +255,12 @@ def chat(ori_query):
                           temperature=0
                           )
         ori_query = output_parser(output, 'OUTPUT QUESTION: ')
+
+    # Image Router
+    router_result = st.session_state['image_router'](ori_query)
+    if '图' in ori_query and router_result.name=='image':
+        retrive_img(ori_query)
+        return
     # Query Router
     router_result = chat_llm(QUERY_ROUTER_PROMPT.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False), 
                                                         question=ori_query), 
