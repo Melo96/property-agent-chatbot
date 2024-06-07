@@ -243,10 +243,13 @@ def rag(ori_query):
 
     # Response
     print(len(st.session_state['messages']))
+    prompt_choice = random.choice([1,2])
     if len(st.session_state['messages'])>=6:
-        response = chat_llm_stream(RAG_USER_PROMPT.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
+        response = chat_llm_stream(RAG_USER_PROMPT_CONTACT.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
+    elif prompt_choice==1:
+        response = chat_llm_stream(RAG_USER_PROMPT_ASK.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
     else:
-        response = chat_llm_stream(RAG_USER_PROMPT_EARLY.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
+        response = chat_llm_stream(RAG_USER_PROMPT.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
 
     # Add rephrased query and llm response to the chat history
     st.session_state['messages'].append({"role": "user", "content": ori_query})
