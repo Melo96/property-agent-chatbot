@@ -208,14 +208,6 @@ def rag(ori_query):
     # e = time.time()
     # print(f'Query rephrasing: {ori_query}, {e-s} seconds')
 
-    # Image Router
-    router_result = st.session_state['image_router'](ori_query)
-    print(f'Image router: {router_result}, {ori_query}')
-
-    if '图' in ori_query and router_result.name=='image':
-        retrive_img(ori_query)
-        return
-
     # RAG Router
     s = time.time()
     router_result = chat_llm(RAG_ROUTER_PROMPT.format(question=ori_query, 
@@ -281,6 +273,14 @@ def chat(ori_query):
         e = time.time()
         print(f'Coreference resolution: {output}, {e-s} seconds')
         ori_query = output_parser(output, 'OUTPUT QUESTION: ')
+    
+    # Image Router
+    router_result = st.session_state['image_router'](ori_query)
+    print(f'Image router: {router_result}, {ori_query}')
+
+    if '图' in ori_query and router_result.name=='image':
+        retrive_img(ori_query)
+        return
 
     # Query Router
     s = time.time()
