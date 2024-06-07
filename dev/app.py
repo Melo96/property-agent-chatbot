@@ -118,7 +118,7 @@ def initialize_chain():
 
     # Load routers
     with open(Path(__file__).parent / 'routes/img.json', 'r') as f:
-        image_route = Route(**json.load(f))
+        image_route = Route(**json.load(f), score_threshold=0.7)
     image_router = RouteLayer(encoder=encoder, routes=[image_route])
 
     # Load S3 client
