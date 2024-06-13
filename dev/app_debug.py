@@ -114,7 +114,7 @@ def initialize_chain():
 
     # Load routers
     with open(Path(__file__).parent / 'routes/img.json', 'r') as f:
-        image_route = Route(**json.load(f), score_threshold=0.7)
+        image_route = Route(**json.load(f), score_threshold=0.8)
     image_router = RouteLayer(encoder=encoder, routes=[image_route])
 
     # Load S3 client
@@ -129,14 +129,9 @@ def initialize_chain():
         name2id = json.load(f)
     return [vectorstore, docstore, llm_client, reranker, image_router, s3_client, name2id]
 
-def retrive_img(query):
-    router_result = chat_llm(IMAGE_ROUTER_PROMPT.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False), 
-                                                        question=query), 
-                                                        temperature=0)
-    print(f'Image response router: {router_result}')
-    router_result = output_parser(router_result, 'OUTPUT:')
+def retrive_img(result):
     pattern = re.compile(r'<house>(.*?)</house>')
-    houses_list = pattern.findall(router_result)
+    houses_list = pattern.findall(result)
     if houses_list:
         for house in houses_list:
             if house in st.session_state['name2id']: # 
@@ -171,10 +166,11 @@ def retrive_img(query):
 def multi_queries_retrieval(ori_query):
     # Multi-query generation
     s = time.time()
-    multi_query = chat_llm(ori_query, MULTI_QUERY_PROMPT, st.session_state['messages'], temperature=0)
+    multi_query = chat_llm(MULTI_QUERY_PROMPT.format(question=ori_query), temperature=0)
+    pattern = re.compile(r'<question>(.*?)</question>')
+    queries = [ori_query] + pattern.findall(multi_query)
     e = time.time()
     print(f'Multi queries: {e-s} seconds')
-    queries = [ori_query] + multi_query.split("\n")[1:-1]
     print(queries)
 
     # Get the matches for each query
@@ -200,7 +196,7 @@ def query_rephrase(query):
         query = chat_llm(REPHRASING_PROMPT.format(chat_history=json.dumps(st.session_state['messages'], ensure_ascii=False), question=query))
     return query
 
-@st.spinner('正在输入...')
+@st.spinner('Typing...')
 def rag(ori_query):
     # # Query Rephrasing
     # s = time.time()
@@ -242,14 +238,7 @@ def rag(ori_query):
             result_text = ''.join(f'<context>{t}</context>' for t in match_list_text)
 
     # Response
-    print(len(st.session_state['messages']))
-    prompt_choice = random.choice([1,2])
-    if len(st.session_state['messages'])>=6:
-        response = chat_llm_stream(RAG_USER_PROMPT_CONTACT.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
-    elif prompt_choice==1:
-        response = chat_llm_stream(RAG_USER_PROMPT_ASK.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
-    else:
-        response = chat_llm_stream(RAG_USER_PROMPT.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
+    response = chat_llm_stream(RAG_USER_PROMPT.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
 
     # Add rephrased query and llm response to the chat history
     st.session_state['messages'].append({"role": "user", "content": ori_query})
@@ -273,11 +262,13 @@ def chat(ori_query):
         ori_query = output_parser(output, 'OUTPUT QUESTION: ')
     
     # Image Router
-    router_result = st.session_state['image_router'](ori_query)
+    router_result = chat_llm(IMAGE_ROUTER_PROMPT.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False), 
+                                                        question=ori_query), 
+                                                        temperature=0)
     print(f'Image router: {router_result}, {ori_query}')
-
-    if '图' in ori_query and router_result.name=='image':
-        retrive_img(ori_query)
+    router_result = json.loads(router_result.split('OUTPUT JSON:')[-1].strip())
+    if router_result['need_image']=='yes':
+        retrive_img(router_result['result'])
         return
 
     # Query Router
@@ -301,11 +292,11 @@ def chat(ori_query):
     print(f'Response: {e1-s1} seconds')
 
 # Begin of Streamlit UI Code
-st.title("爱房网智能客服DEMO")
+st.title("Pre-sales Agent")
 
 # Initialize chat history
 if "messages" not in st.session_state:
-    st.session_state['display_messages'] = [{"role": "assistant", "content": '您好！感谢您选择爱房网。我是您的专属房产咨询助手小盖。请问有什么可以帮助您的吗？'}]
+    st.session_state['display_messages'] = [{"role": "assistant", "content": "Hi there! Thank you for choosing HyperGAI. How can I help you today?"}]
     st.session_state['messages'] = []
 
 # Display chat messages from history on app rerun
@@ -322,7 +313,7 @@ init = initialize_chain()
 for name, func in zip(sesstion_state_name, init):
     st.session_state[name] = func
 
-if prompt := st.chat_input('请在这里输入消息，点击Enter发送'):
+if prompt := st.chat_input('Message'):
     # Display user message in chat message container
     with st.chat_message("user"):
         st.markdown(prompt)
