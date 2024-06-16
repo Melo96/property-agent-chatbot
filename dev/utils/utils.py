@@ -3,14 +3,18 @@ from pathlib import Path
 from semantic_router import Route
 
 def output_parser(output, split_string='', mode='split'):
-    if mode=='split' and split_string:
+    if split_string:
         if split_string in output:
-            return output.split(split_string)[1]
+            intermediate = output.split(split_string)[1].strip()
         else:
-            print('LLM output is not in desired format')
+            print(f'LLM output is not in desired format: {output}')
             return output
-    else:
-        return output
+    
+    if mode=='split':
+        return intermediate
+    elif mode=='json':
+        return json.loads(intermediate)
+    return output
 
 def get_routes(routes_path='routes'):
     all_routes = Path(routes_path).glob('*.json')

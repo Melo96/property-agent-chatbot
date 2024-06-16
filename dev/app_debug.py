@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
+from langchain_pinecone import PineconeVectorStore
 from langchain_community.storage import RedisStore
 
 from semantic_router import Route
@@ -24,7 +25,7 @@ from semantic_router.encoders import OpenAIEncoder
 from prompt_template.prompts import *
 from prompt_template.response import *
 from prompt_template.costar_prompts import REPHRASING_DECISION_PROMPT, REPHRASING_PROMPT
-from utils.utils import *
+from utils.utils import output_parser, get_routes
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -33,13 +34,14 @@ rerank = False
 router_type = 'llm'
 
 reranker = 'rerank-multilingual-v3.0'
-collection_name = "summaries"
-persist_directory = Path(__file__).parent / "data/0528/chroma_openai_0528"
+db_name = "mock_db"
+db_path = Path(__file__).parent / 'data/mock'
+persist_directory = db_path / 'mock_db'
 redis_host = os.environ['REDIS_HOST']
 redis_port = os.environ['REDIS_PORT']
 redis_password = os.environ['REDIS_PASSWORD']
 top_k = 10
-doc_id_key = "楼盘ID"
+doc_id_key = "property_id"
 
 bucket_name = 'hypergai-data'
 
@@ -99,23 +101,18 @@ def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, dis
 def initialize_chain():
     # The vectorstore to use to index the child chunks
     vectorstore = Chroma(
-        collection_name=collection_name,
+        collection_name=db_name,
         embedding_function=OpenAIEmbeddings(),
         persist_directory=str(persist_directory),
     )
+    # vectorstore =  PineconeVectorStore(index_name=db_name, embedding=OpenAIEmbeddings(), namespace=db_name)
     # The storage layer for the parent documents
     redis_client = redis.Redis(host=redis_host, port=redis_port, password=redis_password, decode_responses=True)
     docstore = RedisStore(client=redis_client)
 
     # Load models
-    encoder = OpenAIEncoder()
     reranker = cohere.Client(os.environ['COHERE_API_KEY'])
     llm_client = openai.Client()
-
-    # Load routers
-    with open(Path(__file__).parent / 'routes/img.json', 'r') as f:
-        image_route = Route(**json.load(f), score_threshold=0.8)
-    image_router = RouteLayer(encoder=encoder, routes=[image_route])
 
     # Load S3 client
     s3_client = boto3.client(
@@ -125,39 +122,41 @@ def initialize_chain():
     )
 
     # Load name2id map
-    with open(Path(__file__).parent / "data/0528/name2id.json", 'r') as f:
+    with open(db_path / "name2id.json", 'r') as f:
         name2id = json.load(f)
-    return [vectorstore, docstore, llm_client, reranker, image_router, s3_client, name2id]
+    return [vectorstore, docstore, llm_client, reranker, s3_client, name2id]
 
-def retrive_img(result):
-    pattern = re.compile(r'<house>(.*?)</house>')
-    houses_list = pattern.findall(result)
+def retrive_img(ori_query):
+    # Get house names
+    result = chat_llm(
+        HOUSE_NAME_PROMPT.format(
+            chat_history=json.dumps(st.session_state['messages'], ensure_ascii=False),
+            question=ori_query
+        ),
+        temperature=0
+    )
+    print(f'Image house names: {result}')
+    result = output_parser(result, 'Result:')
+    pattern = re.compile(r'<property>(.*?)</property>')
+    houses_list = [house_id for house_id in pattern.findall(result) if house_id in st.session_state['name2id']]
     if houses_list:
         for house in houses_list:
-            if house in st.session_state['name2id']: # 
+            try:
                 house_id = st.session_state['name2id'][house]
-                img_list = st.session_state['s3_client'].list_objects_v2(Bucket=bucket_name, Prefix=f'img_house/{house_id}/')
-                if 'Contents' in img_list:
-                    with st.chat_message("assistant"):
-                        img_response = HOUSE_IMAGE_RESPONSE.format(house_name=house)
-                        st.write(img_response)
-                        # Add to the dispayed chat history
-                        st.session_state['display_messages'].append({"role": "assistant", "content": img_response})
-                    img = random.choice(img_list['Contents'])
-                    img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=img['Key'])
-                    image_data = img_response['Body'].read()
-                    with st.chat_message("assistant"):
-                        st.image(BytesIO(image_data))
-                        # Add the image to the dispayed chat history
-                        st.session_state['display_messages'].append({"role": "image", "content": image_data})
-                else:
-                    with st.chat_message("assistant"):
-                        st.write(f'{house}暂时没有对应的户型图哦～')
-                        st.session_state['display_messages'].append({"role": "assistant", "content": f'{house}暂时没有对应的户型图哦～'})
-            else:
-                    with st.chat_message("assistant"):
-                        st.write(f'{house}暂时没有对应的户型图哦～')
-                        st.session_state['display_messages'].append({"role": "assistant", "content": f'{house}暂时没有对应的户型图哦～'})
+                img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=f'mock-real-estate/images_resized/{house_id}.png')
+                with st.chat_message("assistant"):
+                    response = HOUSE_IMAGE_RESPONSE.format(house_name=house)
+                    st.write(response)
+                    st.session_state['display_messages'].append({"role": "assistant", "content": response})
+                image_data = img_response['Body'].read()
+                with st.chat_message("assistant"):
+                    st.image(BytesIO(image_data))
+                    # Add the image to the dispayed chat history
+                    st.session_state['display_messages'].append({"role": "image", "content": image_data})
+            except:
+                with st.chat_message("assistant"):
+                    st.write(f'The requested preperty {house} does not have the corresponding floor plans.')
+                    st.session_state['display_messages'].append({"role": "assistant", "content": f'The requested preperty {house} does not have the corresponding floor plans.'})
     else:
         with st.chat_message("assistant"):
             st.write(HOUSE_IMAGE_NOE_FOUND_RESPONSE)
@@ -190,37 +189,26 @@ def multi_queries_retrieval(ori_query):
         match_list_text = [match['page_content'] for match in match_list]
     return match_list_text
 
-def query_rephrase(query):
-    decision = chat_llm(REPHRASING_DECISION_PROMPT.format(chat_history=json.dumps(st.session_state['messages'], ensure_ascii=False), question=query))
-    if 'true' in decision:
-        query = chat_llm(REPHRASING_PROMPT.format(chat_history=json.dumps(st.session_state['messages'], ensure_ascii=False), question=query))
-    return query
-
 @st.spinner('Typing...')
 def rag(ori_query):
-    # # Query Rephrasing
-    # s = time.time()
-    # ori_query = query_rephrase(ori_query)
-    # e = time.time()
-    # print(f'Query rephrasing: {ori_query}, {e-s} seconds')
-
-    # RAG Router
-    s = time.time()
-    router_result = chat_llm(RAG_ROUTER_PROMPT.format(question=ori_query, 
-                                                      history=json.dumps(st.session_state['messages'], ensure_ascii=False)), 
-                                                      temperature=0)
-    e = time.time()
-    print(f"RAG Router: {router_result}, {e-s} seconds")
-    router_result = output_parser(router_result, 'SUFFICIENT?: ')
+    # Tools router
+    router_result = chat_llm(TOOL_ROUTER_PROMPT.format(context=st.session_state['context'], question=ori_query),
+                             temperature=0)
+    print(f'Tool router: {router_result}')
+    router_result = output_parser(router_result, 'Decision:')
 
     result_text = ''
-    if 'no' in router_result:
+    if router_result=='images':
+        retrive_img(ori_query)
+        return
+    elif router_result=='rag':
         # Multi-query
         s = time.time()
         match_list_text = multi_queries_retrieval(ori_query)
         e = time.time()
         print(f'Vector search: {e-s} seconds')
 
+        # No relevant context
         if not match_list_text:
             with st.chat_message("assistant"):
                 st.write(NO_RELEVANT_FILES)
@@ -230,12 +218,12 @@ def rag(ori_query):
         if rerank:
             s = time.time()
             results = st.session_state['reranker'].rerank(model=reranker, query=ori_query, documents=match_list_text, top_n=20, return_documents=True)
-            result_text_list = [item.document.text for item in results.results]
-            result_text = ''.join(f'<context>{t}</context>' for t in result_text_list)
+            match_list_text = [item.document.text for item in results.results]
             e = time.time()
             print(f'Reranking: {e-s} seconds')
-        else:
-            result_text = ''.join(f'<context>{t}</context>' for t in match_list_text)
+        result_text = ''.join(f'<context>{t}</context>' for t in match_list_text)
+        # Store relevant context
+        st.session_state['context']+=result_text
 
     # Response
     response = chat_llm_stream(RAG_USER_PROMPT.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
@@ -259,31 +247,21 @@ def chat(ori_query):
                         )
         e = time.time()
         print(f'Coreference resolution: {output}, {e-s} seconds')
-        ori_query = output_parser(output, 'OUTPUT QUESTION: ')
-    
-    # Image Router
-    router_result = chat_llm(IMAGE_ROUTER_PROMPT.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False), 
-                                                        question=ori_query), 
-                                                        temperature=0)
-    print(f'Image router: {router_result}, {ori_query}')
-    router_result = json.loads(router_result.split('OUTPUT JSON:')[-1].strip())
-    if router_result['need_image']=='yes':
-        retrive_img(router_result['result'])
-        return
+        ori_query = output_parser(output, 'Result:')
 
-    # Query Router
+    # Intent Router
     s = time.time()
-    router_result = chat_llm(QUERY_ROUTER_PROMPT.format(history=json.dumps(st.session_state['messages'], ensure_ascii=False), 
-                                                        question=ori_query), 
+    router_result = chat_llm(INTENT_ROUTER_PROMPT.format(question=ori_query), 
+                             chat_history=st.session_state['messages'],
                              temperature=0
                             )
     e = time.time()
-    print(f"Query Router: {router_result}, {e-s} seconds")
-    router_result = output_parser(router_result, 'OUTPUT:')
+    print(f"Intent Router: {router_result}, {e-s} seconds")
+    router_result = output_parser(router_result, 'Decision:')
 
     # Call RAG or directly call LLM
     s1 = time.time()
-    if 'query' in router_result:
+    if 'real_estate_inquiry' in router_result:
         rag(ori_query)
     else:
         chat_llm_stream(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
@@ -298,6 +276,7 @@ st.title("Pre-sales Agent")
 if "messages" not in st.session_state:
     st.session_state['display_messages'] = [{"role": "assistant", "content": "Hi there! Thank you for choosing HyperGAI. How can I help you today?"}]
     st.session_state['messages'] = []
+    st.session_state['context'] = ''
 
 # Display chat messages from history on app rerun
 for message in st.session_state['display_messages']:
@@ -308,7 +287,7 @@ for message in st.session_state['display_messages']:
         with st.chat_message(message["role"]):
             st.write(message["content"])
 
-sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 'image_router', 's3_client', 'name2id']
+sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_client', 'name2id']
 init = initialize_chain()
 for name, func in zip(sesstion_state_name, init):
     st.session_state[name] = func
