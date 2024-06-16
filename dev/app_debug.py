@@ -18,10 +18,6 @@ from langchain_community.vectorstores import Chroma
 from langchain_pinecone import PineconeVectorStore
 from langchain_community.storage import RedisStore
 
-from semantic_router import Route
-from semantic_router.layer import RouteLayer
-from semantic_router.encoders import OpenAIEncoder
-
 from prompt_template.prompts import *
 from prompt_template.response import *
 from prompt_template.costar_prompts import REPHRASING_DECISION_PROMPT, REPHRASING_PROMPT
