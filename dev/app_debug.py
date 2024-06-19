@@ -37,6 +37,7 @@ redis_host = os.environ['REDIS_HOST']
 redis_port = os.environ['REDIS_PORT']
 redis_password = os.environ['REDIS_PASSWORD']
 top_k = 10
+reranker_top_k = 10
 doc_id_key = "property_id"
 
 bucket_name = 'hypergai-data'
@@ -266,7 +267,7 @@ def chat(ori_query):
     print(f'Response: {e1-s1} seconds')
 
 # Begin of Streamlit UI Code
-st.title("Pre-sales Agent")
+st.title("Intelligent Real Estate Agent")
 
 # Initialize chat history
 if "messages" not in st.session_state:
