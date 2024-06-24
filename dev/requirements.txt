@@ -1,6 +1,6 @@
 streamlit
 langchain==0.2.3
-chromadb
+chromadb==0.5.0
 FlagEmbedding
 python-dotenv
 redis
@@ -11,3 +11,4 @@ pysqlite3-binary
 semantic_router
 llama-index==0.10.44
 boto3
+protobuf==3.20
