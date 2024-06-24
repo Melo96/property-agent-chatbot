@@ -30,15 +30,19 @@ rerank = False
 router_type = 'llm'
 
 reranker = 'rerank-multilingual-v3.0'
-db_name = "mock_db"
-db_path = Path(__file__).parent / 'data/mock'
-persist_directory = db_path / 'mock_db'
+# db_name = "mock_db"
+# db_path = Path(__file__).parent / 'data/mock'
+# persist_directory = db_path / 'mock_db'
+# doc_id_key = "property_id"
+db_name = "summaries"
+db_path = Path(__file__).parent / 'data/0528'
+persist_directory = db_path / 'chroma_openai_0528'
+doc_id_key = "楼盘ID"
 redis_host = os.environ['REDIS_HOST']
 redis_port = os.environ['REDIS_PORT']
 redis_password = os.environ['REDIS_PASSWORD']
 top_k = 10
 reranker_top_k = 10
-doc_id_key = "property_id"
 
 bucket_name = 'hypergai-data'
 
@@ -102,7 +106,6 @@ def initialize_chain():
         embedding_function=OpenAIEmbeddings(),
         persist_directory=str(persist_directory),
     )
-    # vectorstore =  PineconeVectorStore(index_name=db_name, embedding=OpenAIEmbeddings(), namespace=db_name)
     # The storage layer for the parent documents
     redis_client = redis.Redis(host=redis_host, port=redis_port, password=redis_password, decode_responses=True)
     docstore = RedisStore(client=redis_client)
@@ -173,7 +176,8 @@ def multi_queries_retrieval(ori_query):
     with ThreadPoolExecutor(max_workers=len(queries)) as executor:
         vectore_search_partial = partial(st.session_state['vectorstore'].similarity_search_with_relevance_scores, 
                                          k=top_k, 
-                                         score_threshold=0.7)
+                                         score_threshold=0.7
+                                         )
         nested_results = executor.map(vectore_search_partial, queries)
 
     matches = [item for sub_list in nested_results for item in sub_list]
@@ -189,9 +193,11 @@ def multi_queries_retrieval(ori_query):
 @st.spinner('Typing...')
 def rag(ori_query):
     # Tools router
+    s = time.time()
     router_result = chat_llm(TOOL_ROUTER_PROMPT.format(context=st.session_state['context'], question=ori_query),
                              temperature=0)
-    print(f'Tool router: {router_result}')
+    e = time.time()
+    print(f'Tool router: {router_result}, {e-s} seconds')
     router_result = output_parser(router_result, 'Decision:')
 
     result_text = ''
@@ -223,7 +229,11 @@ def rag(ori_query):
         st.session_state['context']+=result_text
 
     # Response
-    response = chat_llm_stream(RAG_USER_PROMPT.format(context=result_text, question=ori_query), RAG_SYSTEM_PROMPT, st.session_state['messages'])
+    result_text = st.session_state['context'] if not result_text else result_text
+    response = chat_llm_stream(RAG_USER_PROMPT.format(context=result_text, question=ori_query), 
+                               RAG_SYSTEM_PROMPT, 
+                               st.session_state['messages']
+                               )
 
     # Add rephrased query and llm response to the chat history
     st.session_state['messages'].append({"role": "user", "content": ori_query})
