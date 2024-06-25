@@ -25,7 +25,7 @@ TOOL_ROUTER_PROMPT = """
 Your task is to select the most appropriate tool to use by understanding the user's intent. You have access to the following tools:
 
 images: useful when user is asking for images
-rag: useful when the existing context is not sufficient to answer the user's question
+rag: useful the user's question is related to real estates and the existing context is not sufficient to answer the user's question
 
 If none of the tools above is needed, your decision is 'no_need'.
 
@@ -80,21 +80,21 @@ Question: {question}
 Thought:"""
 
 COREFERENCE_RESOLUTION = """
-Your task is to determine whether the user's question needs coreference resolution.
-If so, you need to rephrase question with the following requirements:
-1. If there are pronouns or conditions are missing in the question, please make a complete question according to the context.
-2. If the question is complete, please keep the original question.
-Do not modify or add any other infomation of the original question. 
+Your task is to determine whether the user's text input needs coreference resolution.
+If so, you need to rephrase the text input with the following requirements:
+1. If there are pronouns or conditions are missing in the text input, please make it complete according to the context.
+2. If the text input is complete, please keep the original text input.
+Do not modify or add any other infomation of the original text input. 
 Use the following format:
 
 Chat History: the chat history between the user and the assistant
-Question: the user's current input question 
+User Input: the user's current text input 
 Thought: you should always think about what to do
-Result: the final rephrased question
+Result: the final rephrased text
 
 Begin!
 Chat History: {history}
-Question: {question}
+User Input: {question}
 Thought:"""
 
 MULTI_QUERY_PROMPT = """
