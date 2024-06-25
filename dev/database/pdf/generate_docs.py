@@ -11,3 +11,4 @@ output_path = Path('/Users/yangkaiwen/Documents/hypergai-chatbot-data/handbook_d
 elements = partition_pdf("/Users/yangkaiwen/Documents/hypergai-chatbot-data/handbook_demo/adobe_handbook.pdf")
 elements = [element.to_dict() for element in elements]
 
+for i, doc in enumerate(elements):
