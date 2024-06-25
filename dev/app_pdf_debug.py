@@ -12,6 +12,8 @@ from io import BytesIO
 from functools import partial
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+from pdf2image import convert_from_path
+from unstructured.staging.base import elements_from_base64_gzipped_json
 
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
@@ -19,12 +21,12 @@ from langchain_community.storage import RedisStore
 
 from prompt_template.prompts_handbook import *
 from prompt_template.response import *
-from utils.utils import output_parser, get_routes
+from utils.utils import draw_bounding_box, merge_elements_metadata
 
 from dotenv import load_dotenv
 load_dotenv()
 
-rerank = False
+rerank = True
 router_type = 'llm'
 
 reranker = 'rerank-multilingual-v3.0'
@@ -35,8 +37,8 @@ doc_id_key = "doc_id"
 redis_host = os.environ['REDIS_HOST']
 redis_port = os.environ['REDIS_PORT']
 redis_password = os.environ['REDIS_PASSWORD']
-top_k = 5
-reranker_top_k = 10
+top_k = 10
+reranker_top_k = 5
 
 bucket_name = 'hypergai-data'
 
@@ -99,34 +101,6 @@ def initialize_chain():
     )
     return [vectorstore, docstore, llm_client, reranker, s3_client]
 
-def multi_queries_retrieval(ori_query):
-    # Multi-query generation
-    s = time.time()
-    multi_query = chat_llm(MULTI_QUERY_PROMPT.format(question=ori_query), temperature=0)
-    pattern = re.compile(r'<question>(.*?)</question>')
-    queries = [ori_query] + pattern.findall(multi_query)
-    e = time.time()
-    print(f'Multi queries: {e-s} seconds')
-    print(queries)
-
-    # Get the matches for each query
-    with ThreadPoolExecutor(max_workers=len(queries)) as executor:
-        vectore_search_partial = partial(st.session_state['vectorstore'].similarity_search_with_relevance_scores, 
-                                         k=top_k, 
-                                         score_threshold=0.7
-                                         )
-        nested_results = executor.map(vectore_search_partial, queries)
-
-    matches = [item for sub_list in nested_results for item in sub_list]
-    match_list_text = ''
-    if matches:
-        doc_ids = set(map(lambda d: d[0].metadata[doc_id_key], matches))
-        matches = st.session_state['docstore'].mget(list(doc_ids))
-        print(f'Found {len(matches)} relevant docs')
-        match_list = [json.loads(match) for match in matches]
-        match_list_text = [match['page_content'] for match in match_list]
-    return match_list_text
-
 def chat(ori_query):
     # Multi-query generation
     s = time.time()
@@ -155,6 +129,15 @@ def chat(ori_query):
         matches = st.session_state['docstore'].mget(list(doc_ids))
         print(f'Found {len(matches)} relevant docs')
         match_list = [json.loads(match) for match in matches]
+        # Reranking
+        if rerank:
+            s = time.time()
+            rerank_results = st.session_state['reranker'].rerank(model=reranker, query=ori_query, documents=match_list, rank_fields=['page_content'], top_n=reranker_top_k, return_documents=False)
+            rerank_results_index = [result.index for result in rerank_results.results]
+            match_list = [match_list[i] for i in rerank_results_index]
+            e = time.time()
+
+            print(f'Rerank {e-s} seconds')
         match_list_text = [match['page_content'] for match in match_list]
     else:
         with st.chat_message("assistant"):
@@ -162,7 +145,7 @@ def chat(ori_query):
             st.session_state['display_messages'].append({"role": "assistant", "content": NO_RELEVANT_FILES})
             return
 
-    result_text = ''.join(f'<context>{t}</context>' for t in match_list_text)
+    result_text = '\n\n'.join(f'{i+1}. {t}' for i, t in enumerate(match_list_text))
     s = time.time()
     response = chat_llm_stream(CHAT_USER_PROMPT.format(context=result_text, question=ori_query), 
                                CHAT_SYSTEM_PROMPT, 
@@ -170,7 +153,7 @@ def chat(ori_query):
                                )
     e = time.time()
     print(f'Response: {e-s} seconds')
-    return response
+    return response, match_list
 
 # Begin of Streamlit UI Code
 st.title("Employee Handbook Assistant")
@@ -180,6 +163,7 @@ if "messages" not in st.session_state:
     st.session_state['display_messages'] = []
     st.session_state['messages'] = []
     st.session_state['context'] = ''
+    st.session_state['page_imgs'] = convert_from_path(persist_directory / 'adobe_handbook.pdf')
 
 sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_client']
 init = initialize_chain()
@@ -189,7 +173,22 @@ for name, func in zip(sesstion_state_name, init):
 if prompt := st.chat_input('Message'):
     # Display user message in chat message container
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.write(prompt)
 
     # Display assistant response in chat message container
-    chat(prompt)
+    response, match_list = chat(prompt)
+    # 
+    with st.chat_message("assistant"):
+        st.write("You can refer to the following highlighted context:")
+    doc = match_list[0]
+    base64_elements_str = doc['metadata']['orig_elements']
+    elements = elements_from_base64_gzipped_json(base64_elements_str)
+    page, bbox = merge_elements_metadata(elements)
+    image = st.session_state['page_imgs'][page-1]
+    
+    size = (int(elements[0].metadata.coordinates.system.width), int(elements[0].metadata.coordinates.system.height))
+    img_with_bbox = draw_bounding_box(image, list(bbox), size)
+    with st.chat_message("assistant"):
+        st.write(f'Page {page}, {doc['metadata']['summary']}')
+        st.image(img_with_bbox)
+
