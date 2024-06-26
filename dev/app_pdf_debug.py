@@ -7,8 +7,6 @@ import json
 import time
 import redis
 import boto3
-import random
-from io import BytesIO
 from functools import partial
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
