@@ -180,7 +180,7 @@ if prompt := st.chat_input('Message'):
     base64_elements_str = doc['metadata']['orig_elements']
     elements = elements_from_base64_gzipped_json(base64_elements_str)
     page, bbox = merge_elements_metadata(elements)
-    image = convert_from_path(persist_directory / 'adobe_handbook.pdf', first_page=page, last_page=page)
+    image = convert_from_path(persist_directory / 'adobe_handbook.pdf', first_page=page, last_page=page)[0]
     
     size = (int(elements[0].metadata.coordinates.system.width), int(elements[0].metadata.coordinates.system.height))
     img_with_bbox = draw_bounding_box(image, list(bbox), size)
