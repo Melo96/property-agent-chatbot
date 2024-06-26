@@ -13,3 +13,4 @@ llama-index
 boto3
 pdf2image
 unstructured[pdf]
+opencv-python
