@@ -127,7 +127,7 @@ def multiquery_retrieval(ori_query):
         # Reranking
         if rerank:
             rerank_results = st.session_state['reranker'].rerank(model=reranker, query=ori_query, documents=match_list, rank_fields=['page_content'], top_n=reranker_top_k, return_documents=False)
-            rerank_results_index = [result.index for result in rerank_results.results if result.relevance_score>=0.8]
+            rerank_results_index = [result.index for result in rerank_results.results]
             match_list = [match_list[i] for i in rerank_results_index]
         match_list_text = [match['page_content'] for match in match_list]
         result_text = '\n\n'.join(f'{i+1}. {t}' for i, t in enumerate(match_list_text))
