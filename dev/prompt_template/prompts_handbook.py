@@ -7,7 +7,7 @@ You will be given a question asked by our user.
 Your task is to breakdown user's original questions into multiple sub questions.
 These sub questions will be converted to vector to search for relevant context from a vectore database. 
 The sub questions you generated are aimmed to get a more diverse semantic search result.
-You can generate up to 5 sub questions. 
+You can generate up to 3 sub questions. 
 Do not generate anything that was not mentioned in the original questions. 
 
 Use the following format:

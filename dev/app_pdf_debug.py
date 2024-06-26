@@ -45,7 +45,7 @@ bucket_name = 'hypergai-data'
 def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0.2, llm="gpt-4o"):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
     if chat_history:
-        messages+=chat_history
+        messages+=[msg for msg in chat_history if msg['role']!='image']
     messages += [{'role': 'user', 'content': user_input}]
 
     with st.chat_message("assistant"):
@@ -74,7 +74,7 @@ def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, dis
     if display_textbox:
         with st.chat_message("assistant"):
             st.write(message)
-        st.session_state['display_messages'].append({"role": "assistant", "content": message})
+        st.session_state['messages'].append({"role": "assistant", "content": message})
     return message
 
 @st.cache_resource
@@ -142,7 +142,7 @@ def chat(ori_query):
     else:
         with st.chat_message("assistant"):
             st.write(NO_RELEVANT_FILES)
-            st.session_state['display_messages'].append({"role": "assistant", "content": NO_RELEVANT_FILES})
+            st.session_state['messages'].append({"role": "assistant", "content": NO_RELEVANT_FILES})
             return
 
     result_text = '\n\n'.join(f'{i+1}. {t}' for i, t in enumerate(match_list_text))
@@ -160,7 +160,6 @@ st.title("Employee Handbook Assistant")
 
 # Initialize chat history
 if "messages" not in st.session_state:
-    st.session_state['display_messages'] = []
     st.session_state['messages'] = []
     st.session_state['context'] = ''
     st.session_state['page_imgs'] = convert_from_path(persist_directory / 'adobe_handbook.pdf')
@@ -170,16 +169,28 @@ init = initialize_chain()
 for name, func in zip(sesstion_state_name, init):
     st.session_state[name] = func
 
+# Display chat messages from history on app rerun
+for message in st.session_state['messages']:
+    if message["role"]=='image':
+        with st.chat_message('assistant'):
+            st.image(message["content"])
+    else:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+
 if prompt := st.chat_input('Message'):
     # Display user message in chat message container
     with st.chat_message("user"):
         st.write(prompt)
+        st.session_state['messages'].append({"role": "user", "content": prompt})
 
     # Display assistant response in chat message container
     response, match_list = chat(prompt)
-    # 
+    # Display reference
     with st.chat_message("assistant"):
-        st.write("You can refer to the following highlighted context:")
+        reference_response = "You can refer to the following highlighted context:"
+        st.write(reference_response)
+        st.session_state['messages'].append({"role": "assistant", "content": reference_response})
     doc = match_list[0]
     base64_elements_str = doc['metadata']['orig_elements']
     elements = elements_from_base64_gzipped_json(base64_elements_str)
@@ -189,6 +200,9 @@ if prompt := st.chat_input('Message'):
     size = (int(elements[0].metadata.coordinates.system.width), int(elements[0].metadata.coordinates.system.height))
     img_with_bbox = draw_bounding_box(image, list(bbox), size)
     with st.chat_message("assistant"):
-        st.write(f'Page {page}, {doc['metadata']['summary']}')
+        reference_response = f'Page {page}, {doc['metadata']['summary']}'
+        st.write(reference_response)
         st.image(img_with_bbox)
+        st.session_state['messages'].append({"role": "assistant", "content": reference_response})
+        st.session_state['messages'].append({"role": "image", "content": img_with_bbox})
 
