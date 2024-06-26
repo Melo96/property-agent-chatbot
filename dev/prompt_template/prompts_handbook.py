@@ -20,6 +20,22 @@ Begin!
 Question: {question}
 Thought:"""
 
+TOPK_ROUTER_PROMPT = """
+Your task is to determine the appropriate configuration based on the user's query.
+Here is the description of the configuration:
+
+top_k: search and return top_k the most relevant text chunks in order better answer the user's query. 
+
+Use the following format:
+
+Question: the user's input question 
+Response: a JSON of the appropriate configuration, either one of [{{"top_k": 10}}, {{"top_k": 20}}]. If answering the user's question requires listing items (e.g. all, every), it means you need more text chunks to better answer the question, so your response should be {{"top_k": 20}}. Otherwise {{"top_k": 10}}. 
+
+Begin! 
+
+Question: {question}
+Response:"""
+
 MULTI_QUERY_PROMPT = """
 You will be given a question asked by our user. 
 Your task is to breakdown user's original questions into multiple sub questions.

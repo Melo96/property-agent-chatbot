@@ -35,8 +35,6 @@ doc_id_key = "doc_id"
 redis_host = os.environ['REDIS_HOST']
 redis_port = os.environ['REDIS_PORT']
 redis_password = os.environ['REDIS_PASSWORD']
-top_k = 10
-reranker_top_k = 5
 
 bucket_name = 'hypergai-data'
 
@@ -56,7 +54,7 @@ def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0
         response = st.write_stream(stream)
     return response
 
-def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, display_textbox=False, llm="gpt-4o"):
+def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, display_textbox=False, llm="gpt-4o", response_format=None):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
     if chat_history:
         messages+=chat_history
@@ -65,7 +63,8 @@ def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, dis
     response = st.session_state['llm_client'].chat.completions.create(
             model=llm,
             messages=messages,
-            temperature=temperature
+            temperature=temperature,
+            response_format=response_format
         )
     message = response.choices[0].message.content
 
@@ -100,6 +99,18 @@ def initialize_chain():
     return [vectorstore, docstore, llm_client, reranker, s3_client]
 
 def multiquery_retrieval(ori_query):
+    # Top-K router
+    s = time.time()
+    top_k_json = chat_llm(TOPK_ROUTER_PROMPT.format(question=ori_query), temperature=0, response_format={"type": "json_object"})
+    try:
+        top_k_json = json.loads(top_k_json)
+        top_k = top_k_json['top_k']
+        reranker_top_k = top_k // 2
+    except:
+        top_k = 10
+        reranker_top_k = 5
+    e = time.time()
+    print(f"Get top-k param: {e-s} seconds, {top_k_json}")
     # Multi-query generation
     s = time.time()
     multi_query = chat_llm(MULTI_QUERY_PROMPT.format(question=ori_query), temperature=0)
