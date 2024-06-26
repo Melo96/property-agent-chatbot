@@ -45,3 +45,9 @@ You must follow the requirements below: 1. If you cannot find an answer from the
 Context: {context}
 Question: {question}
 Response:"""
+
+CHAT_USER_PROMPT_2 = """
+In this scenario, suppose you cannot found any relevant information to answer the user's question. Your response should strictly follow the steps: 1. Sincerely apologize for not able to answer the question. 2. Kindly ask the user for clarification or provide more information, so that you can answer the question better. 
+
+Question: {question}
+Response:"""

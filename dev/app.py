@@ -127,29 +127,36 @@ def multiquery_retrieval(ori_query):
         # Reranking
         if rerank:
             rerank_results = st.session_state['reranker'].rerank(model=reranker, query=ori_query, documents=match_list, rank_fields=['page_content'], top_n=reranker_top_k, return_documents=False)
-            rerank_results_index = [result.index for result in rerank_results.results]
+            rerank_results_index = [result.index for result in rerank_results.results if result.relevance_score>=0.8]
             match_list = [match_list[i] for i in rerank_results_index]
         match_list_text = [match['page_content'] for match in match_list]
+        result_text = '\n\n'.join(f'{i+1}. {t}' for i, t in enumerate(match_list_text))
+    if match_list:
+        response = chat_llm_stream(CHAT_USER_PROMPT.format(context=result_text, question=ori_query), 
+                                CHAT_SYSTEM_PROMPT, 
+                                chat_history=st.session_state['messages'],
+                                )
     else:
-        with st.chat_message("assistant"):
-            st.write(NO_RELEVANT_FILES)
-            return NO_RELEVANT_FILES, []
-
-    result_text = '\n\n'.join(f'{i+1}. {t}' for i, t in enumerate(match_list_text))
-    response = chat_llm_stream(CHAT_USER_PROMPT.format(context=result_text, question=ori_query), 
-                               CHAT_SYSTEM_PROMPT, 
-                               st.session_state['messages'],
-                               )
+        response = chat_llm_stream(CHAT_USER_PROMPT_2.format(question=ori_query), 
+                                chat_history=st.session_state['messages'],
+                                llm='gpt-3.5-turbo'
+                                )
     return response, match_list
 
 def chat(ori_query):
     match_list = []
     router_result = chat_llm(INTENT_ROUTER_PROMPT.format(context=st.session_state['context'], question=ori_query),
                              temperature=0)
+    router_result = output_parser(router_result, 'Decision:')
     if 'handbook_query' in router_result:
         response, match_list = multiquery_retrieval(ori_query)
     else:
-        response = chat_llm_stream(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'], llm='gpt-3.5-turbo')
+        response = chat_llm_stream(ori_query, 
+                                   CHAT_SYSTEM_PROMPT, 
+                                   chat_history=st.session_state['messages'], 
+                                   llm='gpt-3.5-turbo'
+                                   )
+    st.session_state['display_messages'].append({"role": "assistant", "content": response})
     st.session_state['messages'].append({"role": "assistant", "content": response})
     return response, match_list
 
@@ -158,6 +165,7 @@ st.title("Employee Handbook Assistant")
 
 # Initialize chat history
 if "messages" not in st.session_state:
+    st.session_state['display_messages'] = []
     st.session_state['messages'] = []
     st.session_state['context'] = ''
 
@@ -167,7 +175,7 @@ for name, func in zip(sesstion_state_name, init):
     st.session_state[name] = func
 
 # Display chat messages from history on app rerun
-for message in st.session_state['messages']:
+for message in st.session_state['display_messages']:
     if message["role"]=='image':
         with st.chat_message('assistant'):
             st.image(message["content"])
@@ -180,6 +188,7 @@ if prompt := st.chat_input('Message'):
     with st.chat_message("user"):
         st.write(prompt)
         st.session_state['messages'].append({"role": "user", "content": prompt})
+        st.session_state['display_messages'].append({"role": "user", "content": prompt})
 
     # Display assistant response in chat message container
     response, match_list = chat(prompt)
@@ -198,9 +207,9 @@ if prompt := st.chat_input('Message'):
         size = (int(elements[0].metadata.coordinates.system.width), int(elements[0].metadata.coordinates.system.height))
         img_with_bbox = draw_bounding_box(image, list(bbox), size)
         with st.chat_message("assistant"):
-            reference_response = f'Page {page}, {doc['metadata']['summary']}'
-            st.write(reference_response)
-            st.session_state['messages'].append({"role": "assistant", "content": reference_response})
+            reference_response = f"You can refer to the following highlighted context from **page {page}**: <br> {doc['metadata']['summary']}"
+            st.write(reference_response, unsafe_allow_html=True)
+            st.session_state['display_messages'].append({"role": "assistant", "content": reference_response})
         with st.chat_message("assistant"):
             st.image(img_with_bbox)
-            st.session_state['messages'].append({"role": "image", "content": img_with_bbox})
+            st.session_state['display_messages'].append({"role": "image", "content": img_with_bbox})
