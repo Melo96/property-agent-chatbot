@@ -134,7 +134,6 @@ def multiquery_retrieval(ori_query):
     matches = [item for sub_list in nested_results for item in sub_list]
     match_list_text = ''
     match_list = []
-    match_list_filtered = []
     if matches:
         doc_ids = set(map(lambda d: d[0].metadata[doc_id_key], matches))
         matches = st.session_state['docstore'].mget(list(doc_ids))
@@ -144,9 +143,7 @@ def multiquery_retrieval(ori_query):
         if rerank:
             s = time.time()
             rerank_results = st.session_state['reranker'].rerank(model=reranker, query=ori_query, documents=match_list, rank_fields=['page_content'], top_n=reranker_top_k, return_documents=False)
-            rerank_filtered_index = [result.index for result in rerank_results.results if result.relevance_score>=0.8]
             rerank_results_index = [result.index for result in rerank_results.results]
-            match_list_filtered = [match_list[i] for i in rerank_filtered_index]
             match_list = [match_list[i] for i in rerank_results_index]
             e = time.time()
 
@@ -166,10 +163,10 @@ def multiquery_retrieval(ori_query):
                                 )
     e = time.time()
     print(f"Response: {e-s} seconds")
-    return response, match_list_filtered
+    return response, match_list
 
 def chat(ori_query):
-    match_list_filtered = []
+    match_list = []
     # Intent router
     s = time.time()
     router_result = chat_llm(INTENT_ROUTER_PROMPT.format(context=st.session_state['context'], question=ori_query),
@@ -178,7 +175,7 @@ def chat(ori_query):
     print(f'Tool router: {router_result}, {e-s} seconds')
     router_result = output_parser(router_result, 'Decision:')
     if 'handbook_query' in router_result:
-        response, match_list_filtered = multiquery_retrieval(ori_query)
+        response, match_list = multiquery_retrieval(ori_query)
     else:
         response = chat_llm_stream(ori_query, 
                                    CHAT_SYSTEM_PROMPT, 
@@ -189,7 +186,7 @@ def chat(ori_query):
     print(f'Response: {e-s} seconds')
     st.session_state['display_messages'].append({"role": "assistant", "content": response})
     st.session_state['messages'].append({"role": "assistant", "content": response})
-    return response, match_list_filtered
+    return response, match_list
 
 # Begin of Streamlit UI Code
 st.title("Employee Handbook Assistant")
@@ -199,6 +196,9 @@ if "messages" not in st.session_state:
     st.session_state['display_messages'] = []
     st.session_state['messages'] = []
     st.session_state['context'] = ''
+
+with st.sidebar:
+    st.text("Reference related to the latest\nresponse will be displayed here")
 
 sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_client']
 init = initialize_chain()
@@ -222,21 +222,18 @@ if prompt := st.chat_input('Message'):
         st.session_state['display_messages'].append({"role": "user", "content": prompt})
 
     # Display assistant response in chat message container
-    response, match_list_filtered = chat(prompt)
-    if match_list_filtered:
-        # Display reference
-        doc = match_list_filtered[0]
+    response, match_list = chat(prompt)
+
+    # Display reference
+    for i, doc in enumerate(match_list):
         base64_elements_str = doc['metadata']['orig_elements']
         elements = elements_from_base64_gzipped_json(base64_elements_str)
         page, bbox = merge_elements_metadata(elements)
-        image = convert_from_path(persist_directory / 'adobe_handbook.pdf', first_page=page, last_page=page)[0]
-
         size = (int(elements[0].metadata.coordinates.system.width), int(elements[0].metadata.coordinates.system.height))
+        image = convert_from_path(persist_directory / 'adobe_handbook.pdf', first_page=page, last_page=page)[0]
+        size = (int(elements[0].metadata.coordinates.system.width), int(elements[0].metadata.coordinates.system.height))
+
         img_with_bbox = draw_bounding_box(image, list(bbox), size)
-        with st.chat_message("assistant"):
-            reference_response = f"You can refer to the following highlighted context from **page {page}**: <br> {doc['metadata']['summary']}"
-            st.write(reference_response, unsafe_allow_html=True)
-            st.session_state['display_messages'].append({"role": "assistant", "content": reference_response})
-        with st.chat_message("assistant"):
+        with st.sidebar.expander(f"reference {i+1}"):
+            st.write(f"**Page {page}**: {doc['metadata']['summary']}")
             st.image(img_with_bbox)
-            st.session_state['display_messages'].append({"role": "image", "content": img_with_bbox})
