@@ -47,7 +47,7 @@ Question: {question}
 Response:"""
 
 CHAT_USER_PROMPT_2 = """
-In this scenario, suppose you cannot found any relevant information to answer the user's question. Your response should strictly follow the steps: 1. Sincerely apologize for not able to answer the question. 2. Kindly ask the user for clarification or provide more information, so that you can answer the question better. 
+In this scenario, suppose you cannot found any relevant information to answer the user's question. Your response should strictly follow the steps: 1. Sincerely apologize for not able to answer the question. 2. Kindly ask the user for clarification or provide more information, so that you can answer the question better. You must follow the requirements below: Do not mention OpenAI and GPT in you response.
 
 Question: {question}
 Response:"""
