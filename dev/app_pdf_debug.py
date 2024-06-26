@@ -19,7 +19,7 @@ from langchain_community.storage import RedisStore
 
 from prompt_template.prompts_handbook import *
 from prompt_template.response import *
-from utils.utils import draw_bounding_box, merge_elements_metadata
+from utils.utils import draw_bounding_box, merge_elements_metadata, output_parser
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -99,7 +99,7 @@ def initialize_chain():
     )
     return [vectorstore, docstore, llm_client, reranker, s3_client]
 
-def chat(ori_query):
+def multiquery_retrieval(ori_query):
     # Multi-query generation
     s = time.time()
     multi_query = chat_llm(MULTI_QUERY_PROMPT.format(question=ori_query), temperature=0)
@@ -122,6 +122,7 @@ def chat(ori_query):
 
     matches = [item for sub_list in nested_results for item in sub_list]
     match_list_text = ''
+    match_list = []
     if matches:
         doc_ids = set(map(lambda d: d[0].metadata[doc_id_key], matches))
         matches = st.session_state['docstore'].mget(list(doc_ids))
@@ -140,17 +141,32 @@ def chat(ori_query):
     else:
         with st.chat_message("assistant"):
             st.write(NO_RELEVANT_FILES)
-            st.session_state['messages'].append({"role": "assistant", "content": NO_RELEVANT_FILES})
-            return
+            return NO_RELEVANT_FILES, []
 
     result_text = '\n\n'.join(f'{i+1}. {t}' for i, t in enumerate(match_list_text))
     s = time.time()
     response = chat_llm_stream(CHAT_USER_PROMPT.format(context=result_text, question=ori_query), 
                                CHAT_SYSTEM_PROMPT, 
-                               st.session_state['messages']
+                               st.session_state['messages'],
                                )
+    return response, match_list
+
+def chat(ori_query):
+    match_list = []
+    # Intent router
+    s = time.time()
+    router_result = chat_llm(INTENT_ROUTER_PROMPT.format(context=st.session_state['context'], question=ori_query),
+                             temperature=0)
+    e = time.time()
+    print(f'Tool router: {router_result}, {e-s} seconds')
+    router_result = output_parser(router_result, 'Decision:')
+    if 'handbook_query' in router_result:
+        response, match_list = multiquery_retrieval(ori_query)
+    else:
+        response = chat_llm_stream(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'], llm='gpt-3.5-turbo')
     e = time.time()
     print(f'Response: {e-s} seconds')
+    st.session_state['messages'].append({"role": "assistant", "content": response})
     return response, match_list
 
 # Begin of Streamlit UI Code
@@ -183,23 +199,24 @@ if prompt := st.chat_input('Message'):
 
     # Display assistant response in chat message container
     response, match_list = chat(prompt)
-    # Display reference
-    with st.chat_message("assistant"):
-        reference_response = "You can refer to the following highlighted context:"
-        st.write(reference_response)
-        st.session_state['messages'].append({"role": "assistant", "content": reference_response})
-    doc = match_list[0]
-    base64_elements_str = doc['metadata']['orig_elements']
-    elements = elements_from_base64_gzipped_json(base64_elements_str)
-    page, bbox = merge_elements_metadata(elements)
-    image = convert_from_path(persist_directory / 'adobe_handbook.pdf', first_page=page, last_page=page)[0]
+    if match_list:
+        # Display reference
+        with st.chat_message("assistant"):
+            reference_response = "You can refer to the following highlighted context:"
+            st.write(reference_response)
+            st.session_state['messages'].append({"role": "assistant", "content": reference_response})
+        doc = match_list[0]
+        base64_elements_str = doc['metadata']['orig_elements']
+        elements = elements_from_base64_gzipped_json(base64_elements_str)
+        page, bbox = merge_elements_metadata(elements)
+        image = convert_from_path(persist_directory / 'adobe_handbook.pdf', first_page=page, last_page=page)[0]
 
-    size = (int(elements[0].metadata.coordinates.system.width), int(elements[0].metadata.coordinates.system.height))
-    img_with_bbox = draw_bounding_box(image, list(bbox), size)
-    with st.chat_message("assistant"):
-        reference_response = f'Page {page}, {doc['metadata']['summary']}'
-        st.write(reference_response)
-        st.image(img_with_bbox)
-        st.session_state['messages'].append({"role": "assistant", "content": reference_response})
-        st.session_state['messages'].append({"role": "image", "content": img_with_bbox})
-
+        size = (int(elements[0].metadata.coordinates.system.width), int(elements[0].metadata.coordinates.system.height))
+        img_with_bbox = draw_bounding_box(image, list(bbox), size)
+        with st.chat_message("assistant"):
+            reference_response = f'Page {page}, {doc['metadata']['summary']}'
+            st.write(reference_response)
+            st.session_state['messages'].append({"role": "assistant", "content": reference_response})
+        with st.chat_message("assistant"):
+            st.image(img_with_bbox)
+            st.session_state['messages'].append({"role": "image", "content": img_with_bbox})
