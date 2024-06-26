@@ -127,7 +127,9 @@ def multiquery_retrieval(ori_query):
         # Reranking
         if rerank:
             rerank_results = st.session_state['reranker'].rerank(model=reranker, query=ori_query, documents=match_list, rank_fields=['page_content'], top_n=reranker_top_k, return_documents=False)
+            rerank_filtered_index = [result.index for result in rerank_results.results if result.relevance_score>=0.8]
             rerank_results_index = [result.index for result in rerank_results.results]
+            match_list_filtered = [match_list[i] for i in rerank_filtered_index]
             match_list = [match_list[i] for i in rerank_results_index]
         match_list_text = [match['page_content'] for match in match_list]
         result_text = '\n\n'.join(f'{i+1}. {t}' for i, t in enumerate(match_list_text))
@@ -141,15 +143,15 @@ def multiquery_retrieval(ori_query):
                                 chat_history=st.session_state['messages'],
                                 llm='gpt-3.5-turbo'
                                 )
-    return response, match_list
+    return response, match_list_filtered
 
 def chat(ori_query):
-    match_list = []
+    match_list_filtered = []
     router_result = chat_llm(INTENT_ROUTER_PROMPT.format(context=st.session_state['context'], question=ori_query),
                              temperature=0)
     router_result = output_parser(router_result, 'Decision:')
     if 'handbook_query' in router_result:
-        response, match_list = multiquery_retrieval(ori_query)
+        response, match_list_filtered = multiquery_retrieval(ori_query)
     else:
         response = chat_llm_stream(ori_query, 
                                    CHAT_SYSTEM_PROMPT, 
@@ -158,7 +160,7 @@ def chat(ori_query):
                                    )
     st.session_state['display_messages'].append({"role": "assistant", "content": response})
     st.session_state['messages'].append({"role": "assistant", "content": response})
-    return response, match_list
+    return response, match_list_filtered
 
 # Begin of Streamlit UI Code
 st.title("Employee Handbook Assistant")
@@ -191,14 +193,10 @@ if prompt := st.chat_input('Message'):
         st.session_state['display_messages'].append({"role": "user", "content": prompt})
 
     # Display assistant response in chat message container
-    response, match_list = chat(prompt)
-    if match_list:
+    response, match_list_filtered = chat(prompt)
+    if match_list_filtered:
         # Display reference
-        with st.chat_message("assistant"):
-            reference_response = "You can refer to the following highlighted context:"
-            st.write(reference_response)
-            st.session_state['messages'].append({"role": "assistant", "content": reference_response})
-        doc = match_list[0]
+        doc = match_list_filtered[0]
         base64_elements_str = doc['metadata']['orig_elements']
         elements = elements_from_base64_gzipped_json(base64_elements_str)
         page, bbox = merge_elements_metadata(elements)

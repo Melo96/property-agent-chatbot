@@ -123,6 +123,7 @@ def multiquery_retrieval(ori_query):
     matches = [item for sub_list in nested_results for item in sub_list]
     match_list_text = ''
     match_list = []
+    match_list_filtered = []
     if matches:
         doc_ids = set(map(lambda d: d[0].metadata[doc_id_key], matches))
         matches = st.session_state['docstore'].mget(list(doc_ids))
@@ -132,7 +133,9 @@ def multiquery_retrieval(ori_query):
         if rerank:
             s = time.time()
             rerank_results = st.session_state['reranker'].rerank(model=reranker, query=ori_query, documents=match_list, rank_fields=['page_content'], top_n=reranker_top_k, return_documents=False)
-            rerank_results_index = [result.index for result in rerank_results.results if result.relevance_score>=0.8]
+            rerank_filtered_index = [result.index for result in rerank_results.results if result.relevance_score>=0.8]
+            rerank_results_index = [result.index for result in rerank_results.results]
+            match_list_filtered = [match_list[i] for i in rerank_filtered_index]
             match_list = [match_list[i] for i in rerank_results_index]
             e = time.time()
 
@@ -152,10 +155,10 @@ def multiquery_retrieval(ori_query):
                                 )
     e = time.time()
     print(f"Response: {e-s} seconds")
-    return response, match_list
+    return response, match_list_filtered
 
 def chat(ori_query):
-    match_list = []
+    match_list_filtered = []
     # Intent router
     s = time.time()
     router_result = chat_llm(INTENT_ROUTER_PROMPT.format(context=st.session_state['context'], question=ori_query),
@@ -164,7 +167,7 @@ def chat(ori_query):
     print(f'Tool router: {router_result}, {e-s} seconds')
     router_result = output_parser(router_result, 'Decision:')
     if 'handbook_query' in router_result:
-        response, match_list = multiquery_retrieval(ori_query)
+        response, match_list_filtered = multiquery_retrieval(ori_query)
     else:
         response = chat_llm_stream(ori_query, 
                                    CHAT_SYSTEM_PROMPT, 
@@ -175,7 +178,7 @@ def chat(ori_query):
     print(f'Response: {e-s} seconds')
     st.session_state['display_messages'].append({"role": "assistant", "content": response})
     st.session_state['messages'].append({"role": "assistant", "content": response})
-    return response, match_list
+    return response, match_list_filtered
 
 # Begin of Streamlit UI Code
 st.title("Employee Handbook Assistant")
@@ -208,10 +211,10 @@ if prompt := st.chat_input('Message'):
         st.session_state['display_messages'].append({"role": "user", "content": prompt})
 
     # Display assistant response in chat message container
-    response, match_list = chat(prompt)
-    if match_list:
+    response, match_list_filtered = chat(prompt)
+    if match_list_filtered:
         # Display reference
-        doc = match_list[0]
+        doc = match_list_filtered[0]
         base64_elements_str = doc['metadata']['orig_elements']
         elements = elements_from_base64_gzipped_json(base64_elements_str)
         page, bbox = merge_elements_metadata(elements)
