@@ -15,13 +15,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain_pinecone import PineconeVectorStore
 from langchain_community.storage import RedisStore
 
 from prompt_template.prompts import *
 from prompt_template.response import *
-from prompt_template.costar_prompts import REPHRASING_DECISION_PROMPT, REPHRASING_PROMPT
-from utils.utils import output_parser, get_routes
+from utils.utils import output_parser
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -30,13 +28,13 @@ rerank = False
 router_type = 'llm'
 
 reranker = 'rerank-multilingual-v3.0'
-# db_name = "mock_db"
-# db_path = Path(__file__).parent / 'data/mock'
-# persist_directory = db_path / 'mock_db'
-# doc_id_key = "property_id"
-db_name = "summaries"
-db_path = Path(__file__).parent / 'data/0528'
-persist_directory = db_path / 'chroma_openai_0528'
+db_name = "mock_db"
+db_path = Path(__file__).parent / 'data/mock'
+persist_directory = db_path / 'mock_db'
+doc_id_key = "property_id"
+# db_name = "summaries"
+# db_path = Path(__file__).parent / 'data/0528'
+# persist_directory = db_path / 'chroma_openai_0528'
 doc_id_key = "楼盘ID"
 redis_host = os.environ['REDIS_HOST']
 redis_port = os.environ['REDIS_PORT']
@@ -192,6 +190,8 @@ def multi_queries_retrieval(ori_query):
 
 @st.spinner('Typing...')
 def rag(ori_query):
+    # Add rephrased query to the chat history
+    st.session_state['messages'].append({"role": "user", "content": ori_query})
     # Tools router
     s = time.time()
     router_result = chat_llm(TOOL_ROUTER_PROMPT.format(context=st.session_state['context'], question=ori_query),
@@ -215,6 +215,7 @@ def rag(ori_query):
         if not match_list_text:
             with st.chat_message("assistant"):
                 st.write(NO_RELEVANT_FILES)
+                st.session_state['display_messages'].append({"role": "assistant", "content": NO_RELEVANT_FILES})
             return
 
         # Reranking
@@ -234,9 +235,7 @@ def rag(ori_query):
                                RAG_SYSTEM_PROMPT, 
                                st.session_state['messages']
                                )
-
-    # Add rephrased query and llm response to the chat history
-    st.session_state['messages'].append({"role": "user", "content": ori_query})
+    # Add the llm response to the chat history
     st.session_state['messages'].append({"role": "assistant", "content": response})
 
 def chat(ori_query):
