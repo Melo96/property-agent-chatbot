@@ -29,11 +29,11 @@ load_dotenv()
 
 rerank = True
 router_type = 'llm'
+sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_client']
 
-reranker = 'rerank-multilingual-v3.0'
-db_name = "adobe_handbook_db"
-db_path = Path(__file__).parent / 'data'
-persist_directory = db_path / db_name
+options = ('adobe', 'hypergai')
+reranker = 'rerank-english-v3.0'
+db_path = Path(__file__).parent / 'data/handbook_db'
 doc_id_key = "doc_id"
 redis_host = os.environ['REDIS_HOST']
 redis_port = os.environ['REDIS_PORT']
@@ -77,13 +77,12 @@ def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, dis
         st.session_state['messages'].append({"role": "assistant", "content": message})
     return message
 
-@st.cache_resource
 def initialize_chain():
     # The vectorstore to use to index the child chunks
     vectorstore = Chroma(
-        collection_name=db_name,
+        collection_name=st.session_state['db_name'],
         embedding_function=OpenAIEmbeddings(),
-        persist_directory=str(persist_directory),
+        persist_directory=str(db_path),
     )
     # The storage layer for the parent documents
     redis_client = redis.Redis(host=redis_host, port=redis_port, password=redis_password, decode_responses=True)
@@ -99,7 +98,11 @@ def initialize_chain():
         aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'], 
         aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
     )
-    return [vectorstore, docstore, llm_client, reranker, s3_client]
+    return {'vectorstore': vectorstore, 
+            'docstore': docstore, 
+            'llm_client': llm_client, 
+            'reranker': reranker,
+            's3_client': s3_client}
 
 def multiquery_retrieval(ori_query):
     top_k_json = chat_llm(TOPK_ROUTER_PROMPT.format(question=ori_query), temperature=0, response_format={"type": "json_object"})
@@ -175,13 +178,22 @@ if "messages" not in st.session_state:
     st.session_state['display_messages'] = []
     st.session_state['messages'] = []
     st.session_state['context'] = ''
+    st.session_state['db_name'] = options[0]
+    
+    init = initialize_chain()
+    for name in sesstion_state_name:
+        st.session_state[name] = init[name]
 
 with st.sidebar:
+    option = st.selectbox('Choose which handbook you are querying about', options)
+    st.write(f'Current Handbook: {option}')
     st.text("Reference related to the latest\nresponse will be displayed here")
-sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_client']
-init = initialize_chain()
-for name, func in zip(sesstion_state_name, init):
-    st.session_state[name] = func
+
+    if option!=st.session_state['db_name']:
+        st.session_state['db_name'] = option
+        init = initialize_chain()
+        for name in sesstion_state_name:
+            st.session_state[name] = init[name]
 
 # Display chat messages from history on app rerun
 for message in st.session_state['display_messages']:
@@ -208,7 +220,7 @@ if prompt := st.chat_input('Message'):
         elements = elements_from_base64_gzipped_json(base64_elements_str)
         page, bbox = merge_elements_metadata(elements)
         size = (int(elements[0].metadata.coordinates.system.width), int(elements[0].metadata.coordinates.system.height))
-        image = convert_from_path(persist_directory / 'adobe_handbook.pdf', first_page=page, last_page=page)[0]
+        image = convert_from_path(db_path / f'{st.session_state['db_name']}_handbook.pdf', first_page=page, last_page=page)[0]
         size = (int(elements[0].metadata.coordinates.system.width), int(elements[0].metadata.coordinates.system.height))
 
         img_with_bbox = draw_bounding_box(image, list(bbox), size)
