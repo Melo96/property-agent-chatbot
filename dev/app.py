@@ -236,6 +236,10 @@ def chat(ori_query):
                         )
         ori_query = output_parser(output, 'Result:')
 
+    router_result = chat_llm(INTENT_ROUTER_PROMPT.format(question=ori_query), 
+                             chat_history=st.session_state['messages'],
+                             temperature=0
+                            )
     router_result = output_parser(router_result, 'Decision:')
 
     # Call RAG or directly call LLM
