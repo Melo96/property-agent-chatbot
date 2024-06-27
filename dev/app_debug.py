@@ -7,7 +7,6 @@ import json
 import time
 import redis
 import boto3
-import random
 from io import BytesIO
 from functools import partial
 from pathlib import Path
@@ -27,7 +26,7 @@ load_dotenv()
 rerank = False
 router_type = 'llm'
 
-reranker = 'rerank-multilingual-v3.0'
+reranker = 'rerank-english-v3.0'
 db_name = "mock_db"
 db_path = Path(__file__).parent / 'data/mock'
 persist_directory = db_path / 'mock_db'
@@ -122,7 +121,11 @@ def initialize_chain():
     # Load name2id map
     with open(db_path / "name2id.json", 'r') as f:
         name2id = json.load(f)
-    return [vectorstore, docstore, llm_client, reranker, s3_client, name2id]
+
+    # Load routes
+    with open(Path(__file__).parent / "routes/routes.json", 'r') as f:
+        routes = json.load(f)
+    return [vectorstore, docstore, llm_client, reranker, s3_client, name2id, routes]
 
 def retrive_img(ori_query):
     # Get house names
@@ -257,13 +260,17 @@ def chat(ori_query):
 
     # Intent Router
     s = time.time()
-    router_result = chat_llm(INTENT_ROUTER_PROMPT.format(question=ori_query), 
-                             chat_history=st.session_state['messages'],
-                             temperature=0
-                            )
+    rerank_result = st.session_state['reranker'].rerank(model=reranker, 
+                                                         query=ori_query, 
+                                                         documents=st.session_state['routes']['intent_router'], 
+                                                         top_n=1,
+                                                         return_documents=False
+                                                         )
+    rerank_result_index = rerank_result.results[0].index
+    rerank_result = st.session_state['routes']['intent_router'][rerank_result_index]
+    router_result = output_parser(rerank_result, 'Name:')
     e = time.time()
-    print(f"Intent Router: {router_result}, {e-s} seconds")
-    router_result = output_parser(router_result, 'Decision:')
+    print(f"Reranker Intent Router: {router_result}, {e-s} seconds")
 
     # Call RAG or directly call LLM
     s1 = time.time()
@@ -293,7 +300,7 @@ for message in st.session_state['display_messages']:
         with st.chat_message(message["role"]):
             st.write(message["content"])
 
-sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_client', 'name2id']
+sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_client', 'name2id', 'routes']
 init = initialize_chain()
 for name, func in zip(sesstion_state_name, init):
     st.session_state[name] = func
