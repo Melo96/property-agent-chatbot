@@ -36,7 +36,6 @@ db_name = "mock_db"
 db_path = Path(__file__).parent / 'data/mock'
 persist_directory = db_path / 'mock_db'
 doc_id_key = "property_id"
-doc_id_key = "楼盘ID"
 redis_host = st.secrets['REDIS_HOST']
 redis_port = st.secrets['REDIS_PORT']
 redis_password = st.secrets['REDIS_PASSWORD']
