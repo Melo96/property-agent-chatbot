@@ -7,6 +7,7 @@ import json
 import time
 import redis
 import boto3
+from PIL import Image
 from functools import partial
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -38,13 +39,15 @@ redis_password = os.environ['REDIS_PASSWORD']
 
 bucket_name = 'hypergai-data'
 
+assistant_icon = Image.open(Path(__file__).parent / 'data/logos/LogoIcon.png')
+
 def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0.2, llm="gpt-4o"):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
     if chat_history:
         messages+=[msg for msg in chat_history if msg['role']!='image']
     messages += [{'role': 'user', 'content': user_input}]
 
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=assistant_icon):
         stream = st.session_state['llm_client'].chat.completions.create(
                 model=llm,
                 messages=messages,
@@ -69,7 +72,7 @@ def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, dis
     message = response.choices[0].message.content
 
     if display_textbox:
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=assistant_icon):
             st.write(message)
         st.session_state['messages'].append({"role": "assistant", "content": message})
     return message
@@ -223,6 +226,9 @@ for message in st.session_state['display_messages']:
     if message["role"]=='image':
         with st.chat_message('assistant'):
             st.image(message["content"])
+    elif message["role"]=='assistant':
+        with st.chat_message('assistant', avatar=assistant_icon):
+            st.write(message["content"])
     else:
         with st.chat_message(message["role"]):
             st.write(message["content"])
