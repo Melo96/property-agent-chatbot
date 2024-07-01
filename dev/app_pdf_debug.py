@@ -28,7 +28,7 @@ rerank = True
 router_type = 'llm'
 sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_client']
 
-options = ('adobe', 'hypergai')
+options = ('adobe',)
 reranker = 'rerank-english-v3.0'
 db_path = Path(__file__).parent / 'data/handbook_db'
 doc_id_key = "doc_id"
@@ -76,6 +76,7 @@ def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, dis
 
 def initialize_chain():
     # The vectorstore to use to index the child chunks
+    import pdb; pdb.set_trace()
     vectorstore = Chroma(
         collection_name=st.session_state['db_name'],
         embedding_function=OpenAIEmbeddings(),

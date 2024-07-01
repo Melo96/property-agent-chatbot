@@ -1,0 +1,6 @@
+{
+    "intent_router": [
+        "Description: related to real estates, property, housing. Name: real_estate_inquiry", 
+        "Description: general chichat, daily conversaton. Name: chichat"
+    ]
+}

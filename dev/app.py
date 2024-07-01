@@ -31,7 +31,7 @@ rerank = True
 router_type = 'llm'
 sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_client']
 
-options = ('adobe')
+options = ('adobe',)
 reranker = 'rerank-english-v3.0'
 db_path = Path(__file__).parent / 'data/handbook_db'
 doc_id_key = "doc_id"
