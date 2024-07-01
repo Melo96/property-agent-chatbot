@@ -8,6 +8,7 @@ import time
 import redis
 import boto3
 import random
+from PIL import Image
 from io import BytesIO
 from functools import partial
 from pathlib import Path
@@ -43,6 +44,9 @@ doc_id_key = "楼盘ID"
 
 bucket_name = 'hypergai-data'
 
+assistant_icon = Image.open(Path(__file__).parent / 'data/logos/LogoIcon.png')
+user_icon = Image.open(Path(__file__).parent / 'data/logos/image.png')
+
 def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0.2, llm="gpt-4o"):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
     if chat_history:
@@ -71,7 +75,7 @@ def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0
                 message+=text
     # Print last chunk of text
     if message:
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=assistant_icon):
             st.write(message, unsafe_allow_html=True)
         st.session_state['display_messages'].append({"role": "assistant", "content": message})
     return message_complete
@@ -90,7 +94,7 @@ def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, dis
     message = response.choices[0].message.content
 
     if display_textbox:
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=assistant_icon):
             st.write(message)
         st.session_state['display_messages'].append({"role": "assistant", "content": message})
     return message
@@ -143,7 +147,7 @@ def retrive_img(query):
                 house_id = st.session_state['name2id'][house]
                 img_list = st.session_state['s3_client'].list_objects_v2(Bucket=bucket_name, Prefix=f'img_house/{house_id}/')
                 if 'Contents' in img_list:
-                    with st.chat_message("assistant"):
+                    with st.chat_message("assistant", avatar=assistant_icon):
                         img_response = HOUSE_IMAGE_RESPONSE.format(house_name=house)
                         st.write(img_response)
                         # Add to the dispayed chat history
@@ -151,20 +155,20 @@ def retrive_img(query):
                     img = random.choice(img_list['Contents'])
                     img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=img['Key'])
                     image_data = img_response['Body'].read()
-                    with st.chat_message("assistant"):
+                    with st.chat_message("assistant", avatar=assistant_icon):
                         st.image(BytesIO(image_data))
                         # Add the image to the dispayed chat history
                         st.session_state['display_messages'].append({"role": "image", "content": image_data})
                 else:
-                    with st.chat_message("assistant"):
+                    with st.chat_message("assistant", avatar=assistant_icon):
                         st.write(f'{house}暂时没有对应的户型图哦～')
                         st.session_state['display_messages'].append({"role": "assistant", "content": f'{house}暂时没有对应的户型图哦～'})
             else:
-                    with st.chat_message("assistant"):
+                    with st.chat_message("assistant", avatar=assistant_icon):
                         st.write(f'{house}暂时没有对应的户型图哦～')
                         st.session_state['display_messages'].append({"role": "assistant", "content": f'{house}暂时没有对应的户型图哦～'})
     else:
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=assistant_icon):
             st.write(HOUSE_IMAGE_NOE_FOUND_RESPONSE)
             st.session_state['display_messages'].append({"role": "assistant", "content": HOUSE_IMAGE_NOE_FOUND_RESPONSE})
 
@@ -308,13 +312,28 @@ if "messages" not in st.session_state:
     st.session_state['display_messages'] = [{"role": "assistant", "content": '您好！感谢您选择爱房网。我是您的专属房产咨询助手小盖。请问有什么可以帮助您的吗？'}]
     st.session_state['messages'] = []
 
+st.markdown(
+    """
+    <style>
+        .st-emotion-cache-4oy321 {
+            text-align: left;
+            flex-direction: row-reverse;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Display chat messages from history on app rerun
 for message in st.session_state['display_messages']:
     if message["role"]=='image':
         with st.chat_message('assistant'):
             st.image(BytesIO(message["content"]))
-    else:
-        with st.chat_message(message["role"]):
+    elif message["role"]=='assistant':
+        with st.chat_message('assistant', avatar=assistant_icon):
+            st.write(message["content"])
+    elif message["role"]=='user':
+        with st.chat_message('assistant', avatar=user_icon):
             st.write(message["content"])
 
 sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 'image_router', 's3_client', 'name2id']
@@ -324,8 +343,8 @@ for name, func in zip(sesstion_state_name, init):
 
 if prompt := st.chat_input('请在这里输入消息，点击Enter发送'):
     # Display user message in chat message container
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    with st.chat_message("user", avatar=user_icon):
+        st.write(prompt)
 
     # Display assistant response in chat message container
     chat(prompt)
