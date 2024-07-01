@@ -1,7 +1,14 @@
 import json
+import base64
 from pathlib import Path
 from PIL import Image, ImageDraw
 from semantic_router import Route
+
+def read_svg(svg_path):
+    svg = open(svg_path).read()
+    b64 = base64.b64encode(svg.encode('utf-8')).decode("utf-8")
+    html = r'<img src="data:image/svg+xml;base64,%s"/>' % b64
+    return html
 
 def output_parser(output, split_string='', mode='split'):
     if split_string:

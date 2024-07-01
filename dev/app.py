@@ -22,7 +22,7 @@ from langchain_community.storage import RedisStore
 
 from prompt_template.prompts_handbook import *
 from prompt_template.response import *
-from utils.utils import draw_bounding_box, merge_elements_metadata, output_parser
+from utils.utils import draw_bounding_box, merge_elements_metadata, output_parser, read_svg
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -185,6 +185,9 @@ if "messages" not in st.session_state:
         st.session_state[name] = init[name]
 
 with st.sidebar:
+    svg_html = read_svg(Path(__file__).parent / 'data/logos/Logo.svg')
+    st.write(svg_html, unsafe_allow_html=True)
+    st.write('\n')
     option = st.selectbox('Choose which handbook you are querying about', options)
     st.write(f'Current Handbook: {option}')
     st.text("Reference related to the latest\nresponse will be displayed here")
