@@ -71,7 +71,7 @@ def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0
         if text:
             message_complete+=text
             if '\n\n' in text:
-                with st.chat_message("assistant"):
+                with st.chat_message("assistant", avatar=assistant_icon):
                     st.markdown(message, unsafe_allow_html=True)
                 st.session_state['display_messages'].append({"role": "assistant", "content": message})
                 message = ''
