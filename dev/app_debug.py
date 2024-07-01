@@ -260,17 +260,21 @@ def chat(ori_query):
 
     # Intent Router
     s = time.time()
-    rerank_result = st.session_state['reranker'].rerank(model=reranker, 
-                                                         query=ori_query, 
-                                                         documents=st.session_state['routes']['intent_router'], 
-                                                         top_n=1,
-                                                         return_documents=False
-                                                         )
-    rerank_result_index = rerank_result.results[0].index
-    rerank_result = st.session_state['routes']['intent_router'][rerank_result_index]
-    router_result = output_parser(rerank_result, 'Name:')
+    # rerank_result = st.session_state['reranker'].rerank(model=reranker, 
+    #                                                      query=ori_query, 
+    #                                                      documents=st.session_state['routes']['intent_router'], 
+    #                                                      top_n=1,
+    #                                                      return_documents=False
+    #                                                      )
+    # rerank_result_index = rerank_result.results[0].index
+    # rerank_result = st.session_state['routes']['intent_router'][rerank_result_index]
+    # router_result = output_parser(rerank_result, 'Name:')
+    router_result = chat_llm(INTENT_ROUTER_PROMPT.format(question=ori_query),
+                             temperature=0
+                             )
+    router_result = output_parser(router_result, 'Decision:')
     e = time.time()
-    print(f"Reranker Intent Router: {router_result}, {e-s} seconds")
+    print(f"Intent Router: {router_result}, {e-s} seconds")
 
     # Call RAG or directly call LLM
     s1 = time.time()
