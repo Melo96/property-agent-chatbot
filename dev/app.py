@@ -11,7 +11,7 @@ import cohere
 import json
 import redis
 import boto3
-import random
+from PIL import Image
 from io import BytesIO
 from functools import partial
 from pathlib import Path
@@ -31,7 +31,7 @@ load_dotenv()
 rerank = False
 router_type = 'llm'
 
-reranker = 'rerank-multilingual-v3.0'
+reranker = 'rerank-english-v3.0'
 db_name = "mock_db"
 db_path = Path(__file__).parent / 'data/mock'
 persist_directory = db_path / 'mock_db'
@@ -43,6 +43,9 @@ top_k = 10
 reranker_top_k = 10
 
 bucket_name = 'hypergai-data'
+
+assistant_icon = Image.open(Path(__file__).parent / 'data/logos/LogoIcon.png')
+user_icon = Image.open(Path(__file__).parent / 'data/logos/image.png')
 
 def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0.2, llm="gpt-4o"):
     messages = [{"role": 'system', "content": system_prompt}] if system_prompt else []
@@ -64,7 +67,7 @@ def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0
         if text:
             message_complete+=text
             if '\n\n' in text:
-                with st.chat_message("assistant"):
+                with st.chat_message("assistant", avatar=assistant_icon):
                     st.markdown(message, unsafe_allow_html=True)
                 st.session_state['display_messages'].append({"role": "assistant", "content": message})
                 message = ''
@@ -72,7 +75,7 @@ def chat_llm_stream(user_input, system_prompt='', chat_history=[], temperature=0
                 message+=text
     # Print last chunk of text
     if message:
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=assistant_icon):
             st.write(message, unsafe_allow_html=True)
         st.session_state['display_messages'].append({"role": "assistant", "content": message})
     return message_complete
@@ -91,7 +94,7 @@ def chat_llm(user_input, system_prompt='', chat_history=[], temperature=0.2, dis
     message = response.choices[0].message.content
 
     if display_textbox:
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=assistant_icon):
             st.write(message)
         st.session_state['display_messages'].append({"role": "assistant", "content": message})
     return message
@@ -141,21 +144,21 @@ def retrive_img(ori_query):
             try:
                 house_id = st.session_state['name2id'][house]
                 img_response = st.session_state['s3_client'].get_object(Bucket=bucket_name, Key=f'mock-real-estate/images_resized/{house_id}.png')
-                with st.chat_message("assistant"):
+                with st.chat_message("assistant", avatar=assistant_icon):
                     response = HOUSE_IMAGE_RESPONSE.format(house_name=house)
                     st.write(response)
                     st.session_state['display_messages'].append({"role": "assistant", "content": response})
                 image_data = img_response['Body'].read()
-                with st.chat_message("assistant"):
+                with st.chat_message("assistant", avatar=assistant_icon):
                     st.image(BytesIO(image_data))
                     # Add the image to the dispayed chat history
                     st.session_state['display_messages'].append({"role": "image", "content": image_data})
             except:
-                with st.chat_message("assistant"):
+                with st.chat_message("assistant", avatar=assistant_icon):
                     st.write(f'The requested preperty {house} does not have the corresponding floor plans.')
                     st.session_state['display_messages'].append({"role": "assistant", "content": f'The requested property {house} does not have the corresponding floor plans.'})
     else:
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=assistant_icon):
             st.write(HOUSE_IMAGE_NOE_FOUND_RESPONSE)
             st.session_state['display_messages'].append({"role": "assistant", "content": HOUSE_IMAGE_NOE_FOUND_RESPONSE})
 
@@ -200,7 +203,7 @@ def rag(ori_query):
         match_list_text = multi_queries_retrieval(ori_query)
         # No relevant context
         if not match_list_text:
-            with st.chat_message("assistant"):
+            with st.chat_message("assistant", avatar=assistant_icon):
                 st.write(NO_RELEVANT_FILES)
                 st.session_state['display_messages'].append({"role": "assistant", "content": NO_RELEVANT_FILES})
             return
@@ -237,11 +240,15 @@ def chat(ori_query):
         ori_query = output_parser(output, 'Result:')
 
     # Intent router
-    router_result = chat_llm(INTENT_ROUTER_PROMPT.format(question=ori_query), 
-                             chat_history=st.session_state['messages'],
-                             temperature=0
-                            )
-    router_result = output_parser(router_result, 'Decision:')
+    rerank_result = st.session_state['reranker'].rerank(model=reranker, 
+                                                         query=ori_query, 
+                                                         documents=st.session_state['routes']['intent_router'], 
+                                                         top_n=1,
+                                                         return_documents=False
+                                                         )
+    rerank_result_index = rerank_result.results[0].index
+    rerank_result = st.session_state['routes']['intent_router'][rerank_result_index]
+    router_result = output_parser(rerank_result, 'Name:')
 
     # Call RAG or directly call LLM
     if 'real_estate_inquiry' in router_result:
@@ -254,17 +261,31 @@ st.title("Intelligent Real Estate Agent")
 
 # Initialize chat history
 if "messages" not in st.session_state:
-    st.session_state['display_messages'] = [{"role": "assistant", "content": "Hi there! Thank you for choosing HyperGAI. How can I help you today?"}]
+    st.session_state['display_messages'] = []
     st.session_state['messages'] = []
     st.session_state['context'] = ''
 
+st.markdown(
+    """
+    <style>
+        .st-emotion-cache-4oy321 {
+            text-align: left;
+            flex-direction: row-reverse;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 # Display chat messages from history on app rerun
 for message in st.session_state['display_messages']:
     if message["role"]=='image':
-        with st.chat_message('assistant'):
+        with st.chat_message('assistant', avatar=assistant_icon):
             st.image(BytesIO(message["content"]))
-    else:
-        with st.chat_message(message["role"]):
+    elif message["role"]=='assistant':
+        with st.chat_message('assistant', avatar=assistant_icon):
+            st.write(message["content"])
+    elif message["role"]=='user':
+        with st.chat_message('user', avatar=user_icon):
             st.write(message["content"])
 
 sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_client', 'name2id']
@@ -274,7 +295,7 @@ for name, func in zip(sesstion_state_name, init):
 
 if prompt := st.chat_input('Message'):
     # Display user message in chat message container
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar=user_icon):
         st.markdown(prompt)
 
     # Display assistant response in chat message container

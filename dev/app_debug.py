@@ -125,11 +125,7 @@ def initialize_chain():
     # Load name2id map
     with open(db_path / "name2id.json", 'r') as f:
         name2id = json.load(f)
-
-    # Load routes
-    with open(Path(__file__).parent / "routes/routes.json", 'r') as f:
-        routes = json.load(f)
-    return [vectorstore, docstore, llm_client, reranker, s3_client, name2id, routes]
+    return [vectorstore, docstore, llm_client, reranker, s3_client, name2id]
 
 def retrive_img(ori_query):
     # Get house names
@@ -319,7 +315,7 @@ for message in st.session_state['display_messages']:
         with st.chat_message('user', avatar=user_icon):
             st.write(message["content"])
 
-sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_client', 'name2id', 'routes']
+sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_client', 'name2id']
 init = initialize_chain()
 for name, func in zip(sesstion_state_name, init):
     st.session_state[name] = func
