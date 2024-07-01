@@ -309,7 +309,8 @@ st.title("爱房网智能客服DEMO")
 
 # Initialize chat history
 if "messages" not in st.session_state:
-    st.session_state['display_messages'] = [{"role": "assistant", "content": '您好！感谢您选择爱房网。我是您的专属房产咨询助手小盖。请问有什么可以帮助您的吗？'}]
+    # st.session_state['display_messages'] = [{"role": "assistant", "content": '您好！感谢您选择爱房网。我是您的专属房产咨询助手小盖。请问有什么可以帮助您的吗？'}]
+    st.session_state['display_messages'] = []
     st.session_state['messages'] = []
 
 st.markdown(
