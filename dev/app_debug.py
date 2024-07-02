@@ -295,13 +295,16 @@ if "messages" not in st.session_state:
     st.session_state['messages'] = []
     st.session_state['context'] = ''
 
+# Display the user and the assistant's message box in the opposite side
 st.markdown(
     """
     <style>
-        .st-emotion-cache-4oy321 {
-            text-align: left;
-            flex-direction: row-reverse;
-        }
+        div.stChatMessage.st-emotion-cache-1c7y2kd.eeusbqq4
+            { 
+                display: flex;
+                text-align: right;
+                flex-direction: row-reverse;
+            }
     </style>
     """,
     unsafe_allow_html=True,
