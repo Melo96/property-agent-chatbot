@@ -275,7 +275,6 @@ def chat(ori_query):
         e = time.time()
         print(f'Coreference resolution: {output}, {e-s} seconds')
         ori_query = output_parser(output, 'OUTPUT QUESTION: ')
-    
     # Image Router
     router_result = st.session_state['image_router'](ori_query)
     print(f'Image router: {router_result}, {ori_query}')
@@ -313,13 +312,16 @@ if "messages" not in st.session_state:
     st.session_state['display_messages'] = []
     st.session_state['messages'] = []
 
+# Display the user and the assistant's message box in the opposite side
 st.markdown(
     """
     <style>
-        .st-emotion-cache-4oy321 {
-            text-align: left;
-            flex-direction: row-reverse;
-        }
+        div.stChatMessage.st-emotion-cache-1c7y2kd.eeusbqq4
+            { 
+                display: flex;
+                text-align: right;
+                flex-direction: row-reverse;
+            }
     </style>
     """,
     unsafe_allow_html=True,
@@ -334,7 +336,7 @@ for message in st.session_state['display_messages']:
         with st.chat_message('assistant', avatar=assistant_icon):
             st.write(message["content"])
     elif message["role"]=='user':
-        with st.chat_message('assistant', avatar=user_icon):
+        with st.chat_message('user', avatar=user_icon):
             st.write(message["content"])
 
 sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 'image_router', 's3_client', 'name2id']
