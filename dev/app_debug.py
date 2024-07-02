@@ -157,7 +157,7 @@ def retrive_img(ori_query):
             except:
                 with st.chat_message("assistant", avatar=assistant_icon):
                     st.write(f'The requested preperty {house} does not have the corresponding floor plans.')
-                    st.session_state['display_messages'].append({"role": "assistant", "content": f'The requested preperty {house} does not have the corresponding floor plans.'})
+                    st.session_state['display_messages'].append({"role": "assistant", "content": f'The requested property {house} does not have the corresponding floor plans.'})
     else:
         with st.chat_message("assistant", avatar=assistant_icon):
             st.write(HOUSE_IMAGE_NOE_FOUND_RESPONSE)
