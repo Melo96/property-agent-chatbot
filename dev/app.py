@@ -308,7 +308,7 @@ st.markdown(
 # Display chat messages from history on app rerun
 for message in st.session_state['display_messages']:
     if message["role"]=='image':
-        with st.chat_message('assistant'):
+        with st.chat_message('assistant', avatar=assistant_icon):
             st.image(BytesIO(message["content"]))
     elif message["role"]=='assistant':
         with st.chat_message('assistant', avatar=assistant_icon):
