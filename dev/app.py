@@ -270,6 +270,12 @@ st.markdown(
                 text-align: right;
                 flex-direction: row-reverse;
             }
+        div.stChatMessage.st-emotion-cache-janbn0
+            { 
+                display: flex;
+                text-align: right;
+                flex-direction: row-reverse;
+            }
     </style>
     """,
     unsafe_allow_html=True,
