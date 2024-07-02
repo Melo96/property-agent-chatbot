@@ -288,7 +288,13 @@ if "messages" not in st.session_state:
 st.markdown(
     """
     <style>
-        div.stChatMessage.st-emotion-cache-1c7y2kd.eeusbqq4
+        div.stChatMessage.st-emotion-cache-1c7y2kd
+            { 
+                display: flex;
+                text-align: right;
+                flex-direction: row-reverse;
+            }
+        div.stChatMessage.st-emotion-cache-janbn0
             { 
                 display: flex;
                 text-align: right;
