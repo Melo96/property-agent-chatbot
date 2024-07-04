@@ -31,7 +31,7 @@ sesstion_state_name = ['vectorstore', 'docstore', 'llm_client', 'reranker', 's3_
 
 options = ('adobe',)
 reranker = 'rerank-english-v3.0'
-db_path = Path(__file__).parent / 'data/handbook_db'
+db_path = Path(__file__).parent / 'data'
 doc_id_key = "doc_id"
 redis_host = os.environ['REDIS_HOST']
 redis_port = os.environ['REDIS_PORT']
@@ -82,7 +82,7 @@ def initialize_chain():
     vectorstore = Chroma(
         collection_name=st.session_state['db_name'],
         embedding_function=OpenAIEmbeddings(),
-        persist_directory=str(db_path),
+        persist_directory=os.path.join(str(db_path), st.session_state['db_name']),
     )
     # The storage layer for the parent documents
     redis_client = redis.Redis(host=redis_host, port=redis_port, password=redis_password, decode_responses=True)
@@ -206,6 +206,27 @@ if "messages" not in st.session_state:
     init = initialize_chain()
     for name in sesstion_state_name:
         st.session_state[name] = init[name]
+
+# Display the user and the assistant's message box in the opposite side
+st.markdown(
+    """
+    <style>
+        div.stChatMessage.st-emotion-cache-1c7y2kd
+            { 
+                display: flex;
+                text-align: right;
+                flex-direction: row-reverse;
+            }
+        div.stChatMessage.st-emotion-cache-janbn0
+            { 
+                display: flex;
+                text-align: right;
+                flex-direction: row-reverse;
+            }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 with st.sidebar:
     svg_html = read_svg(Path(__file__).parent / 'data/logos/Logo.svg')
