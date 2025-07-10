@@ -273,7 +273,7 @@ def chat(ori_query):
         chat_llm_stream(ori_query, CHAT_SYSTEM_PROMPT, chat_history=st.session_state['messages'])
 
 # Begin of Streamlit UI Code
-st.title("爱房网智能客服DEMO")
+st.title("房产中介智能客服DEMO")
 
 # Initialize chat history
 if "messages" not in st.session_state:
